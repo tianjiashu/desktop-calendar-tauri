@@ -1,0 +1,155 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   Design Tokens (Phase A)
+   参考: docs/ui-optimization/02-design-foundations.md §3.2
+   ========================================================================== */
+
+:root {
+  /* ---------- 品牌主色:Steel Blue ---------- */
+  --brand-50:  #eff6ff;
+  --brand-100: #dbeafe;
+  --brand-200: #bfdbfe;
+  --brand-300: #93c5fd;
+  --brand-400: #60a5fa;
+  --brand-500: #3b82f6;  /* 暂保留兼容,后续淡出 */
+  --brand-600: #2563eb;
+  --brand-700: #1d4ed8;
+
+  /* ---------- 新主色:Indigo Steel ---------- */
+  --accent-400: #6b85f3;  /* 浅色提示（如 tooltip 链接） */
+  --accent-500: #4f6bed;  /* 主操作色 */
+  --accent-600: #3f56d4;
+  --accent-700: #3245b0;
+
+  /* ---------- 事件类型色（语义化） ---------- */
+  --event-interview: #4f6bed;  /* 钢蓝 */
+  --event-meeting:   #10b981;  /* 翡翠绿 */
+  --event-reminder:  #f59e0b;  /* 琥珀 */
+  --event-deadline:  #ef4444;  /* 警示红 */
+  --event-default:   #64748b;  /* Slate */
+
+  /* ---------- 中性色:Warm Slate（浅色） ---------- */
+  --bg-base:        #fafaf9;  /* 主背景,warm off-white */
+  --bg-elevated:    #ffffff;  /* 卡片、Dialog */
+  --bg-subtle:      #f5f5f4;  /* header、status bar */
+  --bg-hover:       #f0f0ef;  /* hover 态 */
+  --border-subtle:  #e7e5e4;  /* hairline */
+  --border-default: #d6d3d1;  /* input 边框 */
+  --text-primary:   #1c1917;  /* stone-900 */
+  --text-secondary: #57534e;  /* stone-600 */
+  --text-tertiary:  #a8a29e;  /* stone-400 */
+  --text-inverse:   #fafaf9;  /* 深色背景上的字 */
+
+  /* ---------- 阴影:tinted ---------- */
+  --shadow-sm: 0 1px 2px 0 rgb(28 25 23 / 0.04);
+  --shadow-md: 0 4px 8px -2px rgb(28 25 23 / 0.08), 0 2px 4px -2px rgb(28 25 23 / 0.04);
+  --shadow-lg: 0 12px 24px -6px rgb(28 25 23 / 0.10), 0 4px 8px -4px rgb(28 25 23 / 0.06);
+  --shadow-glow: 0 0 0 3px rgb(79 107 237 / 0.15);  /* focus ring */
+
+  /* ---------- 圆角系统（统一） ---------- */
+  --radius-sm:  6px;   /* 小按钮、tag */
+  --radius-md:  8px;   /* input、button */
+  --radius-lg:  12px;  /* card、dialog */
+  --radius-xl:  16px;  /* week-view-container 外壳 */
+  --radius-full: 9999px; /* 浮球、pill */
+
+  /* ---------- 字号梯度（1.125 modular scale） ---------- */
+  --text-xs:   11px;
+  --text-sm:   12px;
+  --text-base: 13px;
+  --text-md:   14px;
+  --text-lg:   16px;
+  --text-xl:   18px;
+  --text-2xl:  22px;
+  --text-3xl:  28px;
+
+  /* ---------- 间距（4px 基线） ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+}
+
+/* === 暗色模式:Cool Slate（偏冷以平衡 warm light） === */
+.dark {
+  --bg-base:        #0c0a09;  /* stone-950 */
+  --bg-elevated:    #1c1917;  /* stone-900 */
+  --bg-subtle:      #292524;  /* stone-800 */
+  --bg-hover:       #44403c;  /* stone-700 */
+  --border-subtle:  #292524;
+  --border-default: #44403c;
+  --text-primary:   #fafaf9;
+  --text-secondary: #d6d3d1;
+  --text-tertiary:  #78716c;
+  --text-inverse:   #1c1917;
+
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-md: 0 4px 8px -2px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 12px 24px -6px rgb(0 0 0 / 0.5), 0 4px 8px -4px rgb(0 0 0 / 0.4);
+
+  /* 事件类型色在暗色下提亮 10% */
+  --event-interview: #6b85f3;
+  --event-meeting:   #34d399;
+  --event-reminder:  #fbbf24;
+  --event-deadline:  #f87171;
+  --event-default:   #94a3b8;
+}
+
+/* ==========================================================================
+   Global resets & base styles
+   ========================================================================== */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* In widget mode, clip the square window into a circle */
+#root.widget-mode {
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+/* ========== Pulse animation for event indicator ========== */
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.3); }
+}
+
+/* ========== Spin animation for refresh button ========== */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-refresh {
+  animation: spin 1s linear infinite;
+}
+
+/* ========== Reduced motion: respect user preference ========== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

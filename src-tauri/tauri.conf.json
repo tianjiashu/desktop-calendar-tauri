@@ -1,0 +1,37 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicehash/tauri/v2/crates/tauri-config-schema/schema.json",
+  "productName": "desktop-calendar",
+  "version": "0.1.0",
+  "identifier": "com.desktop-calendar.app",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "trayIcon": {
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": true
+    },
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "title": "桌面日历",
+        "width": 100,
+        "height": 100,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": true,
+        "shadow": false,
+        "visible": true,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}

@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+src-tauri/target/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local project data
+.codebuddy/
+.workbuddy/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test coverage
+coverage/
+coverage-output.txt
+coverage.txt
+tmp-cov.txt
+tmp-coverage.txt
+
+# Tauri dev output
+tauri-dev-stderr.txt
+tauri-dev-stdout.txt
+
+# Misc
+*.pdb
