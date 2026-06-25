@@ -1,12 +1,14 @@
 // ========== Window manager hook (F1-F7) ==========
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { logger } from '../utils/logger';
 import {
   WIDGET_SIZE,
   WEEK_VIEW_SIZE,
   TRANSITION_LOCK_MS,
 } from '../constants/windowConfig';
+
+const WINDOW_EDGE_MARGIN = 96;
 
 interface WindowManager {
   isWidgetMode: boolean;
@@ -26,6 +28,7 @@ interface WindowManager {
 export function useWindowManager(): WindowManager {
   const [isWidgetMode, setIsWidgetMode] = useState(true);
   const isTransitioning = useRef(false);
+  const didInitPosition = useRef(false);
 
 /** Frontend → Rust diagnostic log for offline analysis */
 async function diag(msg: string) {
@@ -54,6 +57,50 @@ const doSetSize = useCallback(async (size: { width: number; height: number }, re
     }
   }, []);
 
+  const waitForWindowSize = useCallback(async (size: { width: number; height: number }) => {
+    const { getCurrentWindow } = await import('@tauri-apps/api/window');
+    const win = getCurrentWindow();
+
+    for (let i = 0; i < 8; i += 1) {
+      const outerSize = await win.outerSize();
+      const scaleFactor = await win.scaleFactor();
+      const logicalWidth = outerSize.width / scaleFactor;
+      const logicalHeight = outerSize.height / scaleFactor;
+      if (Math.abs(logicalWidth - size.width) < 12 && Math.abs(logicalHeight - size.height) < 12) {
+        return;
+      }
+      await new Promise(resolve => setTimeout(resolve, 24));
+    }
+  }, []);
+
+  const moveToBottomRight = useCallback(async () => {
+    const { PhysicalPosition, currentMonitor, getCurrentWindow } = await import('@tauri-apps/api/window');
+    const win = getCurrentWindow();
+    const monitor = await currentMonitor();
+    if (!monitor) return;
+
+    const outerSize = await win.outerSize();
+    const margin = Math.round(WINDOW_EDGE_MARGIN * monitor.scaleFactor);
+    const x = monitor.position.x + monitor.size.width - outerSize.width - margin;
+    const y = monitor.position.y + monitor.size.height - outerSize.height - margin;
+    await win.setPosition(new PhysicalPosition(x, y));
+  }, []);
+
+  const moveToCenter = useCallback(async () => {
+    const { PhysicalPosition, currentMonitor, getCurrentWindow } = await import('@tauri-apps/api/window');
+    const win = getCurrentWindow();
+    const monitor = await currentMonitor();
+    if (!monitor) {
+      await win.center();
+      return;
+    }
+
+    const outerSize = await win.outerSize();
+    const x = monitor.position.x + Math.round((monitor.size.width - outerSize.width) / 2);
+    const y = monitor.position.y + Math.round((monitor.size.height - outerSize.height) / 2);
+    await win.setPosition(new PhysicalPosition(x, y));
+  }, []);
+
   /** Set always-on-top via IPC. Logs failure so it's traceable. */
   const setAlwaysOnTop = useCallback(async (on: boolean) => {
     try {
@@ -77,6 +124,8 @@ const doSetSize = useCallback(async (size: { width: number; height: number }, re
       setIsWidgetMode(false);             // Switch React state FIRST — renders WeekView
       await setAlwaysOnTop(false);        // Disable pin-to-top for week view
       await doSetSize(WEEK_VIEW_SIZE, false); // Fixed size, no resize
+      await waitForWindowSize(WEEK_VIEW_SIZE);
+      await moveToCenter();
       logger.info('=== toggleExpand COMPLETE ===');
     } catch (e) {
       logger.error('toggleExpand ERROR:', e);
@@ -85,7 +134,7 @@ const doSetSize = useCallback(async (size: { width: number; height: number }, re
         isTransitioning.current = false;
       }, TRANSITION_LOCK_MS);
     }
-  }, [doSetSize, setAlwaysOnTop]);
+  }, [doSetSize, moveToCenter, setAlwaysOnTop, waitForWindowSize]);
 
   const shrinkToWidget = useCallback(async () => {
     if (isTransitioning.current) {
@@ -98,6 +147,7 @@ const doSetSize = useCallback(async (size: { width: number; height: number }, re
     try {
       setIsWidgetMode(true);              // Switch React state FIRST — renders BallWidget
       await doSetSize(WIDGET_SIZE, true); // Resizable for dragging
+      await moveToBottomRight();
       await setAlwaysOnTop(true);         // Re-enable pin-to-top
       logger.info('=== shrinkToWidget COMPLETE ===');
     } catch (e) {
@@ -107,7 +157,24 @@ const doSetSize = useCallback(async (size: { width: number; height: number }, re
         isTransitioning.current = false;
       }, TRANSITION_LOCK_MS);
     }
-  }, [doSetSize, setAlwaysOnTop]);
+  }, [doSetSize, moveToBottomRight, setAlwaysOnTop]);
+
+  useEffect(() => {
+    if (didInitPosition.current) return;
+    didInitPosition.current = true;
+
+    const initWidgetWindow = async () => {
+      try {
+        await doSetSize(WIDGET_SIZE, true);
+        await moveToBottomRight();
+        await setAlwaysOnTop(true);
+      } catch (e) {
+        logger.warn('init widget window position failed:', e);
+      }
+    };
+
+    initWidgetWindow();
+  }, [doSetSize, moveToBottomRight, setAlwaysOnTop]);
 
   return { isWidgetMode, isTransitioning: isTransitioning.current, toggleExpand, shrinkToWidget };
 }

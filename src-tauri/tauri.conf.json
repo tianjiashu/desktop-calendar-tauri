@@ -10,10 +10,6 @@
     "beforeBuildCommand": "npm run build"
   },
   "app": {
-    "trayIcon": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": true
-    },
     "withGlobalTauri": false,
     "windows": [
       {
@@ -27,7 +23,7 @@
         "resizable": true,
         "shadow": false,
         "visible": true,
-        "center": true
+        "center": false
       }
     ],
     "security": {

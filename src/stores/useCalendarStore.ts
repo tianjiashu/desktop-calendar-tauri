@@ -113,7 +113,6 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
     // Dynamically import Tauri event API
     const startListening = async () => {
       try {
-        // @ts-expect-error Tauri API
         const { listen } = await import('@tauri-apps/api/event');
 
         await listen<DbChangedEvent>('db:events_changed', async (event) => {

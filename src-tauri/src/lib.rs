@@ -9,7 +9,93 @@ pub mod models;
 
 use db::get_db_path;
 use std::sync::{Arc, Mutex};
-use tauri::{LogicalSize, Manager};
+use tauri::{
+    image::Image,
+    menu::MenuBuilder,
+    tray::{MouseButton, TrayIconBuilder, TrayIconEvent},
+    LogicalSize, Manager, PhysicalPosition, Position,
+};
+
+const WINDOW_EDGE_MARGIN: i32 = 96;
+const TRAY_MENU_SHOW: &str = "show";
+const TRAY_MENU_HIDE: &str = "hide";
+const TRAY_MENU_QUIT: &str = "quit";
+
+fn move_window_to_bottom_right(window: &tauri::WebviewWindow) {
+    let Ok(Some(monitor)) = window.current_monitor() else {
+        tracing::warn!("[RUST SETUP] Failed to resolve current monitor for initial position");
+        return;
+    };
+    let Ok(outer_size) = window.outer_size() else {
+        tracing::warn!("[RUST SETUP] Failed to read outer size for initial position");
+        return;
+    };
+
+    let margin = (WINDOW_EDGE_MARGIN as f64 * monitor.scale_factor()).round() as i32;
+    let monitor_position = monitor.position();
+    let monitor_size = monitor.size();
+    let x = monitor_position.x + monitor_size.width as i32 - outer_size.width as i32 - margin;
+    let y = monitor_position.y + monitor_size.height as i32 - outer_size.height as i32 - margin;
+
+    if let Err(e) = window.set_position(Position::Physical(PhysicalPosition::new(x, y))) {
+        tracing::warn!("[RUST SETUP] Failed to move window to bottom-right: {}", e);
+    } else {
+        tracing::info!("[RUST SETUP] Window moved to bottom-right: x={} y={}", x, y);
+    }
+}
+
+fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+fn calendar_tray_icon() -> Image<'static> {
+    const SIZE: u32 = 32;
+    let mut rgba = vec![0u8; (SIZE * SIZE * 4) as usize];
+
+    let mut set_px = |x: u32, y: u32, color: [u8; 4]| {
+        let idx = ((y * SIZE + x) * 4) as usize;
+        rgba[idx..idx + 4].copy_from_slice(&color);
+    };
+
+    for y in 5..29 {
+        for x in 4..28 {
+            let is_corner =
+                (x < 7 && y < 8) || (x > 24 && y < 8) || (x < 7 && y > 25) || (x > 24 && y > 25);
+            if !is_corner {
+                set_px(x, y, [246, 249, 255, 255]);
+            }
+        }
+    }
+
+    for y in 5..11 {
+        for x in 4..28 {
+            set_px(x, y, [42, 126, 255, 255]);
+        }
+    }
+
+    for x in 6..26 {
+        set_px(x, 27, [42, 126, 255, 255]);
+    }
+    for y in 8..27 {
+        set_px(4, y, [42, 126, 255, 255]);
+        set_px(27, y, [42, 126, 255, 255]);
+    }
+
+    for x in [10, 16, 22] {
+        for y in [15, 20, 24] {
+            for yy in y..y + 2 {
+                for xx in x..x + 2 {
+                    set_px(xx, yy, [42, 126, 255, 255]);
+                }
+            }
+        }
+    }
+
+    Image::new_owned(rgba, SIZE, SIZE)
+}
 
 pub struct AppState {
     pub db: Arc<Mutex<rusqlite::Connection>>,
@@ -100,17 +186,39 @@ pub fn run() {
                 window.is_resizable().unwrap_or(false)
             );
 
-            let window_for_tray = window.clone();
-            // Tauri 2 tray-icon feature provides tray from conf.json
-            app.on_tray_icon_event(move |_tray, event| {
-                if let tauri::tray::TrayIconEvent::Click { .. } = event {
-                    let _ = window_for_tray.show();
-                    let _ = window_for_tray.set_focus();
-                }
-            });
+            let tray_menu = MenuBuilder::new(app)
+                .text(TRAY_MENU_SHOW, "显示日历")
+                .text(TRAY_MENU_HIDE, "隐藏到托盘")
+                .separator()
+                .text(TRAY_MENU_QUIT, "退出")
+                .build()?;
 
-            // Center window on first launch (in case conf "center" didn't cover it)
-            let _ = window.center();
+            TrayIconBuilder::with_id("desktop-calendar-tray")
+                .icon(calendar_tray_icon())
+                .icon_as_template(false)
+                .tooltip("桌面日历")
+                .menu(&tray_menu)
+                .show_menu_on_left_click(false)
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        ..
+                    } = event
+                    {
+                        show_main_window(tray.app_handle());
+                    }
+                })
+                .on_menu_event(|app, event| match event.id().as_ref() {
+                    TRAY_MENU_SHOW => show_main_window(app),
+                    TRAY_MENU_HIDE => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.hide();
+                        }
+                    }
+                    TRAY_MENU_QUIT => app.exit(0),
+                    _ => {}
+                })
+                .build(app)?;
 
             // FIX: Force window to physical 64x64px to ensure it renders as a perfect square circle
             // (not an oval) on high-DPI displays (e.g. 125%, 150% scaling).
@@ -129,6 +237,8 @@ pub fn run() {
                     );
                 }
             }
+
+            move_window_to_bottom_right(&window);
 
             // ====== Start MCP HTTP server ======
             let db = db_for_mcp;

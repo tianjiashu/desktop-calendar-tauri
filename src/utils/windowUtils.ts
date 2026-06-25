@@ -6,7 +6,6 @@
  */
 export async function closeToTray(): Promise<void> {
   try {
-    // @ts-expect-error Tauri API available at runtime
     const { getCurrentWindow } = await import('@tauri-apps/api/window');
     const win = getCurrentWindow();
     await win.hide();
@@ -19,7 +18,6 @@ export async function closeToTray(): Promise<void> {
  * Get current window reference.
  */
 export async function getCurrentAppWindow() {
-  // @ts-expect-error Tauri API available at runtime
   const { getCurrentWindow } = await import('@tauri-apps/api/window');
   return getCurrentWindow();
 }
