@@ -384,16 +384,22 @@ impl CalendarMcpService {
         let conn = lock_db(&self.db)?;
         let events = event_repo::find_by_date_range(&conn, args.start_date, args.end_date)?;
 
-        let data = json!({ "events": events, "count": events.len() });
+        let data = json!({
+            "events": events,
+            "count": events.len(),
+            "query": {
+                "start_date": args.start_date,
+                "end_date": args.end_date
+            }
+        });
         let mut result = text_result(to_text_response(&data));
 
-        if args.return_ui {
-            tracing::info!(
-                "[MCP-WIDGET] list_events: return_ui=true, attaching _meta + structuredContent (events={})",
-                events.len()
-            );
-            attach_ui_meta(&mut result, UI_EVENTS_LIST, data);
-        }
+        tracing::info!(
+            "[MCP-WIDGET] list_events: attaching _meta + structuredContent (events={}, return_ui={})",
+            events.len(),
+            args.return_ui
+        );
+        attach_ui_meta(&mut result, UI_EVENTS_LIST, data);
 
         log_serialized("list_events", &result);
         Ok(result)
@@ -415,14 +421,13 @@ impl CalendarMcpService {
 
         let mut result = text_result(to_text_response(&event));
 
-        if args.return_ui {
-            tracing::info!(
-                "[MCP-WIDGET] get_event: return_ui=true, attaching _meta + structuredContent (id={})",
-                event.id
-            );
-            let structured = serde_json::to_value(&event).unwrap_or_default();
-            attach_ui_meta(&mut result, UI_EVENT_DETAIL, structured);
-        }
+        tracing::info!(
+            "[MCP-WIDGET] get_event: attaching _meta + structuredContent (id={}, return_ui={})",
+            event.id,
+            args.return_ui
+        );
+        let structured = serde_json::to_value(&event).unwrap_or_default();
+        attach_ui_meta(&mut result, UI_EVENT_DETAIL, structured);
 
         log_serialized("get_event", &result);
         Ok(result)
@@ -560,16 +565,22 @@ impl CalendarMcpService {
         let duration = args.duration_minutes as i32;
         let slots = event_repo::find_free_slots(&conn, args.date, duration)?;
 
-        let data = json!({ "free_slots": slots, "count": slots.len() });
+        let data = json!({
+            "free_slots": slots,
+            "count": slots.len(),
+            "query": {
+                "date": args.date,
+                "duration_minutes": args.duration_minutes
+            }
+        });
         let mut result = text_result(to_text_response(&data));
 
-        if args.return_ui {
-            tracing::info!(
-                "[MCP-WIDGET] get_free_slots: return_ui=true, attaching _meta + structuredContent (slots={})",
-                slots.len()
-            );
-            attach_ui_meta(&mut result, UI_FREE_SLOTS, data);
-        }
+        tracing::info!(
+            "[MCP-WIDGET] get_free_slots: attaching _meta + structuredContent (slots={}, return_ui={})",
+            slots.len(),
+            args.return_ui
+        );
+        attach_ui_meta(&mut result, UI_FREE_SLOTS, data);
 
         log_serialized("get_free_slots", &result);
         Ok(result)

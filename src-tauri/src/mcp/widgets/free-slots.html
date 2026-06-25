@@ -28,7 +28,8 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-      background: var(--bg); color: var(--fg);
+      background: var(--bg);
+      color: var(--fg);
       padding: 16px;
     }
     .slot-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; color: var(--title-color); }
@@ -36,10 +37,16 @@
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 8px;
-      padding: 12px 16px; margin-bottom: 8px; cursor: pointer;
+      display: block;
+      width: 100%;
+      padding: 12px 16px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      text-align: left;
       transition: box-shadow 0.2s, transform 0.15s;
     }
     .slot-card:hover { box-shadow: 0 2px 12px rgba(16,185,129,0.2); transform: translateY(-1px); }
+    .slot-card:focus-visible { outline: 2px solid #10B981; outline-offset: 2px; }
     .slot-time { font-size: 14px; font-weight: 600; color: var(--card-time); }
     .slot-duration { font-size: 12px; color: var(--card-dur); margin-top: 2px; }
     .empty-state { text-align: center; padding: 32px; color: var(--empty-color); font-size: 14px; }
@@ -49,7 +56,7 @@
 </head>
 <body>
   <div id="root">
-    <div class="slot-title">🕐 空闲时间段</div>
+    <div id="title" class="slot-title">空闲时间段</div>
     <div id="content" class="loading">加载中...</div>
   </div>
   <script type="module">
@@ -61,22 +68,23 @@
       autoResize: true,
     });
 
+    const title = document.getElementById('title');
     const content = document.getElementById('content');
+    let lastInput = {};
 
-    // Host pushes tool result via ontoolresult
+    app.ontoolinput = (input) => {
+      lastInput = input || {};
+      updateTitle(lastInput);
+    };
+
     app.ontoolresult = (result) => {
       if (result?.structuredContent?.free_slots) {
         render(result.structuredContent);
       } else {
-        content.innerHTML = '<div class="empty-state">📅 今天没有空闲时间段</div>';
+        renderEmpty('没有可用的空闲时间段');
       }
     };
 
-    function applyTheme(theme) {
-      if (!theme) return;
-      document.documentElement.setAttribute('data-theme', theme);
-      document.documentElement.style.colorScheme = theme;
-    }
     app.onhostcontextchanged = (ctx) => applyTheme(ctx?.theme);
 
     await app.connect();
@@ -85,34 +93,121 @@
     function render(data) {
       try {
         const slots = data.free_slots || [];
+        updateTitle(data.query || lastInput);
+
         if (!slots.length) {
-          content.innerHTML = '<div class="empty-state">📅 今天没有空闲时间段</div>';
+          renderEmpty('当前日期没有可用的空闲时间段');
           return;
         }
-        content.innerHTML = '';
-        for (let i = 0; i < slots.length; i++) {
-          const slot = slots[i];
-          const card = document.createElement('div');
-          card.className = 'slot-card';
-          const dur = Math.round((slot.end_time - slot.start_time) / 60000);
-          card.innerHTML =
-            '<div class="slot-time">' + fmt(slot.start_time) + ' — ' + fmt(slot.end_time) + '</div>' +
-            '<div class="slot-duration">约 ' + dur + ' 分钟</div>';
-          card.addEventListener('click', (function (s) {
-            return function () {
-              app.uiEvent({ action: 'select_slot', data: { start_time: s.start_time, end_time: s.end_time } });
-            };
-          })(slot));
-          content.appendChild(card);
+
+        content.textContent = '';
+        for (const slot of slots) {
+          content.appendChild(createSlotCard(slot));
         }
       } catch (e) {
-        content.innerHTML = '<div class="error">数据解析失败</div>';
-        app.log('error', 'Render error: ' + e.message);
+        renderError('数据解析失败');
+        logError('Render error: ' + e.message);
       }
     }
 
-    function fmt(ms) { if (!ms) return '--:--'; const d = new Date(ms); return p(d.getHours()) + ':' + p(d.getMinutes()); }
+    function createSlotCard(slot) {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'slot-card';
+      card.addEventListener('click', () => fillCreateEventMessage(slot));
+
+      const dur = Math.round((slot.end_time - slot.start_time) / 60000);
+
+      const timeEl = document.createElement('div');
+      timeEl.className = 'slot-time';
+      timeEl.textContent = fmt(slot.start_time) + ' - ' + fmt(slot.end_time);
+
+      const durationEl = document.createElement('div');
+      durationEl.className = 'slot-duration';
+      durationEl.textContent = '约 ' + dur + ' 分钟';
+
+      card.append(timeEl, durationEl);
+      return card;
+    }
+
+    async function fillCreateEventMessage(slot) {
+      const text = '帮我在 ' + fmtDateTime(slot.start_time) + ' 到 ' + fmtDateTime(slot.end_time) + ' 创建一个日程，标题是：';
+
+      try {
+        if (typeof app.sendMessage !== 'function') {
+          renderError('当前 host 不支持回填消息');
+          return;
+        }
+
+        await app.sendMessage({
+          role: 'user',
+          content: [{ type: 'text', text }],
+          _meta: { 'codebuddy.ai/sendMessageMode': 'fill' },
+        });
+      } catch (e) {
+        renderError('无法回填创建日程消息');
+        logError('Fill create event message failed: ' + e.message);
+      }
+    }
+
+    function updateTitle(query) {
+      if (query?.date) {
+        const duration = query.duration_minutes ? ' · ' + query.duration_minutes + '分钟' : '';
+        title.textContent = '空闲时间段 ' + fmtDate(query.date) + duration;
+        return;
+      }
+      title.textContent = '空闲时间段';
+    }
+
+    function renderEmpty(message) {
+      content.textContent = '';
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = message;
+      content.appendChild(empty);
+    }
+
+    function renderError(message) {
+      content.textContent = '';
+      const error = document.createElement('div');
+      error.className = 'error';
+      error.textContent = message;
+      content.appendChild(error);
+    }
+
+    function applyTheme(theme) {
+      if (!theme) return;
+      document.documentElement.setAttribute('data-theme', theme);
+      document.documentElement.style.colorScheme = theme;
+    }
+
+    function fmt(ms) {
+      if (!ms) return '--:--';
+      const d = new Date(ms);
+      return p(d.getHours()) + ':' + p(d.getMinutes());
+    }
+
+    function fmtDate(ms) {
+      const d = new Date(ms);
+      return (d.getMonth() + 1) + '/' + d.getDate();
+    }
+
+    function fmtDateTime(ms) {
+      const d = new Date(ms);
+      return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+    }
+
     function p(n) { return n < 10 ? '0' + n : '' + n; }
+
+    function logError(message) {
+      try {
+        if (typeof app.sendLog === 'function') {
+          app.sendLog({ level: 'error', logger: 'free-slots', data: message });
+        } else if (typeof app.log === 'function') {
+          app.log({ level: 'error', logger: 'free-slots', data: message });
+        }
+      } catch {}
+    }
   </script>
 </body>
 </html>

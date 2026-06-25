@@ -24,18 +24,29 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-      background: var(--bg); color: var(--fg);
+      background: var(--bg);
+      color: var(--fg);
       padding: 16px;
-      -webkit-user-select: none; user-select: none;
+      -webkit-user-select: none;
+      user-select: none;
     }
     .widget-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; color: var(--title-color); }
     .event-card {
-      background: #3B82F6; color: white; border-radius: 8px;
-      padding: 10px 14px; margin-bottom: 8px; cursor: pointer;
+      background: #3B82F6;
+      color: white;
+      border: 0;
+      border-radius: 8px;
+      display: block;
+      width: 100%;
+      padding: 10px 14px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      text-align: left;
       transition: box-shadow 0.2s, transform 0.15s;
     }
     .event-card:hover { box-shadow: 0 4px 16px rgba(59,130,246,0.35); transform: translateY(-1px); }
     .event-card:active { transform: scale(0.98); }
+    .event-card:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
     .event-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
     .event-time { font-size: 12px; opacity: 0.85; }
     .event-type { font-size: 11px; opacity: 0.7; margin-top: 2px; }
@@ -51,7 +62,7 @@
 </head>
 <body>
   <div id="root">
-    <div class="widget-title">📅 本周日程</div>
+    <div id="title" class="widget-title">日程</div>
     <div id="content" class="loading">加载中...</div>
   </div>
   <script type="module">
@@ -63,23 +74,23 @@
       autoResize: true,
     });
 
+    const title = document.getElementById('title');
     const content = document.getElementById('content');
+    let lastInput = {};
 
-    // Host pushes tool result via ontoolresult
+    app.ontoolinput = (input) => {
+      lastInput = input || {};
+      updateTitle(lastInput);
+    };
+
     app.ontoolresult = (result) => {
       if (result?.structuredContent?.events) {
         render(result.structuredContent);
       } else {
-        content.innerHTML = '<div class="empty-state">🎉 本周暂无日程安排</div>';
+        renderEmpty('暂无日程安排');
       }
     };
 
-    // Theme adaption
-    function applyTheme(theme) {
-      if (!theme) return;
-      document.documentElement.setAttribute('data-theme', theme);
-      document.documentElement.style.colorScheme = theme;
-    }
     app.onhostcontextchanged = (ctx) => applyTheme(ctx?.theme);
 
     await app.connect();
@@ -88,37 +99,131 @@
     function render(data) {
       try {
         const events = data.events || [];
+        updateTitle(data.query || lastInput);
+
         if (!events.length) {
-          content.innerHTML = '<div class="empty-state">🎉 本周暂无日程安排</div>';
+          renderEmpty('当前范围暂无日程安排');
           return;
         }
-        content.innerHTML = '';
-        for (let i = 0; i < events.length; i++) {
-          const ev = events[i];
-          const card = document.createElement('div');
-          card.className = 'event-card event-' + (ev.event_type || 'default');
-          if (ev.color) card.style.background = ev.color;
-          card.innerHTML =
-            '<div class="event-title">' + esc(ev.title || '未命名事件') + '</div>' +
-            '<div class="event-time">' + fmt(ev.start_time) + ' — ' + fmt(ev.end_time) + '</div>' +
-            (ev.event_type ? '<div class="event-type">' + tl(ev.event_type) + '</div>' : '');
-          card.addEventListener('click', (function (event) {
-            return function () {
-              app.uiEvent({ action: 'view_event', data: { event_id: event.id } });
-            };
-          })(ev));
-          content.appendChild(card);
+
+        content.textContent = '';
+        for (const event of events) {
+          content.appendChild(createEventCard(event));
         }
       } catch (e) {
-        content.innerHTML = '<div class="error">数据解析失败</div>';
-        app.log('error', 'Render error: ' + e.message);
+        renderError('数据解析失败');
+        logError('Render error: ' + e.message);
       }
     }
 
-    function fmt(ms) { if (!ms) return '--:--'; const d = new Date(ms); return p(d.getHours()) + ':' + p(d.getMinutes()); }
+    function createEventCard(event) {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'event-card event-' + (event.event_type || 'default');
+      if (event.color) card.style.background = event.color;
+      card.addEventListener('click', () => openEventDetail(event.id));
+
+      const titleEl = document.createElement('div');
+      titleEl.className = 'event-title';
+      titleEl.textContent = event.title || '未命名事件';
+
+      const timeEl = document.createElement('div');
+      timeEl.className = 'event-time';
+      timeEl.textContent = fmt(event.start_time) + ' - ' + fmt(event.end_time);
+
+      card.append(titleEl, timeEl);
+
+      if (event.event_type) {
+        const typeEl = document.createElement('div');
+        typeEl.className = 'event-type';
+        typeEl.textContent = tl(event.event_type);
+        card.appendChild(typeEl);
+      }
+
+      return card;
+    }
+
+    async function openEventDetail(eventId) {
+      try {
+        if (typeof app.callServerTool !== 'function') {
+          await fillMessage('请查看事件详情：' + eventId);
+          return;
+        }
+
+        const result = await app.callServerTool({
+          name: 'get_event',
+          arguments: { event_id: eventId, return_ui: true },
+        });
+
+        if (result?.isError) renderError('无法打开事件详情');
+      } catch (e) {
+        renderError('无法打开事件详情');
+        logError('Open event detail failed: ' + e.message);
+      }
+    }
+
+    async function fillMessage(text) {
+      if (typeof app.sendMessage !== 'function') return;
+      await app.sendMessage({
+        role: 'user',
+        content: [{ type: 'text', text }],
+        _meta: { 'codebuddy.ai/sendMessageMode': 'fill' },
+      });
+    }
+
+    function updateTitle(query) {
+      if (query?.start_date && query?.end_date) {
+        title.textContent = '日程 ' + fmtDate(query.start_date) + ' - ' + fmtDate(query.end_date);
+        return;
+      }
+      title.textContent = '日程';
+    }
+
+    function renderEmpty(message) {
+      content.textContent = '';
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = message;
+      content.appendChild(empty);
+    }
+
+    function renderError(message) {
+      content.textContent = '';
+      const error = document.createElement('div');
+      error.className = 'error';
+      error.textContent = message;
+      content.appendChild(error);
+    }
+
+    function applyTheme(theme) {
+      if (!theme) return;
+      document.documentElement.setAttribute('data-theme', theme);
+      document.documentElement.style.colorScheme = theme;
+    }
+
+    function fmt(ms) {
+      if (!ms) return '--:--';
+      const d = new Date(ms);
+      return p(d.getHours()) + ':' + p(d.getMinutes());
+    }
+
+    function fmtDate(ms) {
+      const d = new Date(ms);
+      return (d.getMonth() + 1) + '/' + d.getDate();
+    }
+
     function p(n) { return n < 10 ? '0' + n : '' + n; }
-    function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
     function tl(t) { const m = { interview: '面试', meeting: '会议', reminder: '提醒', deadline: '截止', default: '其他' }; return m[t] || t; }
+
+    function logError(message) {
+      try {
+        if (typeof app.sendLog === 'function') {
+          app.sendLog({ level: 'error', logger: 'events-list', data: message });
+        } else if (typeof app.log === 'function') {
+          app.log({ level: 'error', logger: 'events-list', data: message });
+        }
+      } catch {}
+    }
   </script>
 </body>
 </html>
