@@ -1,8 +1,8 @@
 // ========== Event repository (唯一写 SQL 的地方) ==========
 
-use rusqlite::{params, Connection};
 use crate::error::{AppError, AppResult};
 use crate::models::event::*;
+use rusqlite::{params, Connection};
 
 /// Helper: parse Event from a database row
 fn event_from_row(row: &rusqlite::Row) -> rusqlite::Result<Event> {
@@ -16,7 +16,8 @@ fn event_from_row(row: &rusqlite::Row) -> rusqlite::Result<Event> {
         is_all_day: row.get::<_, i32>(6)? != 0,
         rrule: row.get(7)?,
         rrule_until: row.get(8)?,
-        exdates: row.get::<_, Option<String>>(9)?
+        exdates: row
+            .get::<_, Option<String>>(9)?
             .map(|s| serde_json::from_str(&s).unwrap_or_default()),
         status: EventStatus::from_str(&row.get::<_, String>(10)?),
         color: row.get(11)?,
@@ -64,8 +65,7 @@ pub fn create_event(conn: &Connection, input: CreateEventInput) -> AppResult<Eve
         ],
     )?;
 
-    find_by_id(conn, &id)?
-        .ok_or_else(|| AppError::Internal("created event not found".into()))
+    find_by_id(conn, &id)?.ok_or_else(|| AppError::Internal("created event not found".into()))
 }
 
 /// Find an event by ID (excludes soft-deleted)
@@ -74,7 +74,7 @@ pub fn find_by_id(conn: &Connection, id: &str) -> AppResult<Option<Event>> {
         "SELECT id, title, description, start_time, end_time, timezone,
                 is_all_day, rrule, rrule_until, exdates, status, color,
                 event_type, location, url, created_by, created_at, updated_at, deleted_at
-         FROM events WHERE id = ?1 AND deleted_at IS NULL"
+         FROM events WHERE id = ?1 AND deleted_at IS NULL",
     )?;
 
     let mut rows = stmt.query_map(params![id], event_from_row)?;
@@ -95,7 +95,7 @@ pub fn find_by_date_range(conn: &Connection, start: i64, end: i64) -> AppResult<
          WHERE deleted_at IS NULL
            AND start_time < ?2
            AND end_time > ?1
-         ORDER BY start_time ASC"
+         ORDER BY start_time ASC",
     )?;
 
     let events: Result<Vec<_>, _> = stmt
@@ -134,6 +134,41 @@ fn build_update_sets(
                 add_field!($field, v);
             }
         };
+    }
+    macro_rules! add_null_field {
+        ($field:ident) => {{
+            let param_idx = sets.len() + 1;
+            sets.push(format!("{} = ?{}", stringify!($field), param_idx));
+            values.push(Box::new(rusqlite::types::Null));
+        }};
+    }
+
+    if input
+        .clear_fields
+        .contains(&ClearableEventField::Description)
+        && input.description.is_some()
+    {
+        return Err(AppError::InvalidToolArgs(
+            "description cannot be both set and cleared".into(),
+        ));
+    }
+    if input.clear_fields.contains(&ClearableEventField::Location) && input.location.is_some() {
+        return Err(AppError::InvalidToolArgs(
+            "location cannot be both set and cleared".into(),
+        ));
+    }
+    if input.clear_fields.contains(&ClearableEventField::Url) && input.url.is_some() {
+        return Err(AppError::InvalidToolArgs(
+            "url cannot be both set and cleared".into(),
+        ));
+    }
+
+    for field in &input.clear_fields {
+        match field {
+            ClearableEventField::Description => add_null_field!(description),
+            ClearableEventField::Location => add_null_field!(location),
+            ClearableEventField::Url => add_null_field!(url),
+        }
     }
 
     add_opt_str!(title);
@@ -182,8 +217,7 @@ fn build_update_sets(
 
 /// Update an event (partial update). Returns the updated Event.
 pub fn update_event(conn: &Connection, id: &str, input: UpdateEventInput) -> AppResult<Event> {
-    let existing = find_by_id(conn, id)?
-        .ok_or_else(|| AppError::EventNotFound(id.to_string()))?;
+    let existing = find_by_id(conn, id)?.ok_or_else(|| AppError::EventNotFound(id.to_string()))?;
 
     let now = now_ms();
     let (sets, mut values) = build_update_sets(&existing, &input, now)?;
@@ -204,8 +238,7 @@ pub fn update_event(conn: &Connection, id: &str, input: UpdateEventInput) -> App
         return Err(AppError::EventNotFound(id.to_string()));
     }
 
-    find_by_id(conn, id)?
-        .ok_or_else(|| AppError::Internal("updated event not found".into()))
+    find_by_id(conn, id)?.ok_or_else(|| AppError::Internal("updated event not found".into()))
 }
 
 /// Soft-delete an event (set deleted_at)
@@ -237,7 +270,10 @@ pub fn find_free_slots(
     let events = find_by_date_range(conn, date, day_end)?;
 
     if events.is_empty() {
-        return Ok(vec![TimeSlot { start_time: date, end_time: day_end }]);
+        return Ok(vec![TimeSlot {
+            start_time: date,
+            end_time: day_end,
+        }]);
     }
 
     Ok(find_gaps_in_day(date, day_end, &events, slot_duration_ms))
@@ -257,14 +293,20 @@ fn find_gaps_in_day(
         if event.start_time > cursor {
             let gap = event.start_time - cursor;
             if gap >= min_gap_ms {
-                slots.push(TimeSlot { start_time: cursor, end_time: event.start_time });
+                slots.push(TimeSlot {
+                    start_time: cursor,
+                    end_time: event.start_time,
+                });
             }
         }
         cursor = cursor.max(event.end_time);
     }
 
     if day_end - cursor >= min_gap_ms {
-        slots.push(TimeSlot { start_time: cursor, end_time: day_end });
+        slots.push(TimeSlot {
+            start_time: cursor,
+            end_time: day_end,
+        });
     }
 
     slots

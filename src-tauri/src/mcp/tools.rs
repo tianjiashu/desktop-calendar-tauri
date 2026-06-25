@@ -8,10 +8,9 @@
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::handler::server::ServerHandler;
 use rmcp::model::{
-    CallToolResult, GetPromptResult, Implementation, ListPromptsResult,
-    ListResourcesResult, PaginatedRequestParams, Prompt, PromptMessage,
-    PromptMessageRole, ReadResourceRequestParams, ReadResourceResult, ServerCapabilities,
-    ServerInfo,
+    CallToolResult, GetPromptResult, Implementation, ListPromptsResult, ListResourcesResult,
+    PaginatedRequestParams, Prompt, PromptMessage, PromptMessageRole, ReadResourceRequestParams,
+    ReadResourceResult, ServerCapabilities, ServerInfo,
 };
 use rmcp::service::RequestContext;
 use rmcp::tool;
@@ -41,9 +40,10 @@ const MAX_TITLE_LEN: usize = 200;
 const MAX_DESC_LEN: usize = 2000;
 const MAX_LOCATION_LEN: usize = 500;
 const MAX_URL_LEN: usize = 2000;
-const MAX_COLOR_LEN: usize = 20;
+const MAX_LIST_RANGE_DAYS: i64 = 90;
 const MAX_FREE_SLOT_MINUTES: i64 = 480; // 8 hours
 const MIN_FREE_SLOT_MINUTES: i64 = 5;
+const MS_PER_DAY: i64 = 24 * 60 * 60 * 1000;
 
 /// Example timestamp for error messages: 2026-06-23 14:00 CST in Unix ms.
 /// Pre-computed to avoid unwrap() in validate_time_range hot path.
@@ -122,6 +122,8 @@ pub struct UpdateEventArgs {
     pub url: Option<String>,
     /// 事件状态: "confirmed"(已确认) | "cancelled"(已取消) | "tentative"(待定)
     pub status: Option<String>,
+    /// Explicitly clear nullable fields. Allowed values: "description", "location", "url"
+    pub clear_fields: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -146,9 +148,7 @@ pub struct GetFreeSlotsArgs {
 fn validate_title(title: &str) -> Result<(), AppError> {
     let trimmed = title.trim();
     if trimmed.is_empty() {
-        return Err(AppError::InvalidToolArgs(
-            "title 不能为空字符串".into(),
-        ));
+        return Err(AppError::InvalidToolArgs("title 不能为空字符串".into()));
     }
     if trimmed.len() > MAX_TITLE_LEN {
         return Err(AppError::InvalidToolArgs(format!(
@@ -167,6 +167,30 @@ fn validate_time_range(start: i64, end: i64) -> Result<(), AppError> {
              例如: 2026-06-23 14:00 CST 对应 {}。",
             start, end, EXAMPLE_TIMESTAMP_MS
         )));
+    }
+    Ok(())
+}
+
+fn validate_list_time_range(start: i64, end: i64) -> Result<(), AppError> {
+    validate_time_range(start, end)?;
+    let span = end
+        .checked_sub(start)
+        .ok_or_else(|| AppError::InvalidToolArgs("time range is too large".into()))?;
+    let max_span = MAX_LIST_RANGE_DAYS * MS_PER_DAY;
+    if span > max_span {
+        return Err(AppError::InvalidToolArgs(format!(
+            "list_events range cannot exceed {} days",
+            MAX_LIST_RANGE_DAYS
+        )));
+    }
+    Ok(())
+}
+
+fn validate_day_start_utc(date: i64) -> Result<(), AppError> {
+    if date.rem_euclid(MS_PER_DAY) != 0 {
+        return Err(AppError::InvalidToolArgs(
+            "date must be the UTC day-start timestamp in Unix milliseconds".into(),
+        ));
     }
     Ok(())
 }
@@ -192,7 +216,9 @@ fn validate_opt_len(value: &Option<String>, field: &str, max: usize) -> Result<(
         if v.len() > max {
             return Err(AppError::InvalidToolArgs(format!(
                 "{} 不能超过 {} 字符，当前 {} 字符",
-                field, max, v.len()
+                field,
+                max,
+                v.len()
             )));
         }
     }
@@ -201,13 +227,141 @@ fn validate_opt_len(value: &Option<String>, field: &str, max: usize) -> Result<(
 
 fn validate_color(color: &Option<String>) -> Result<(), AppError> {
     if let Some(c) = color {
-        if c.len() > MAX_COLOR_LEN || !c.starts_with('#') {
+        if c.len() != 7 || !c.starts_with('#') || !c[1..].chars().all(|ch| ch.is_ascii_hexdigit()) {
             return Err(AppError::InvalidToolArgs(format!(
-                "color 格式应为 #RRGGBB（如 #3B82F6），当前 '{}'", c
+                "color 格式应为 #RRGGBB（如 #3B82F6），当前 '{}'",
+                c
             )));
         }
     }
     Ok(())
+}
+
+fn validate_url(url: &Option<String>) -> Result<(), AppError> {
+    if let Some(raw) = url {
+        let trimmed = raw.trim();
+        let lower = trimmed.to_ascii_lowercase();
+        if trimmed.is_empty()
+            || !(lower.starts_with("https://")
+                || lower.starts_with("http://")
+                || lower.starts_with("mailto:"))
+        {
+            return Err(AppError::InvalidToolArgs(
+                "url must start with http://, https://, or mailto:".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn parse_event_type(value: Option<&str>) -> Result<Option<EventType>, AppError> {
+    value
+        .map(|raw| match raw.trim() {
+            "interview" => Ok(EventType::Interview),
+            "meeting" => Ok(EventType::Meeting),
+            "reminder" => Ok(EventType::Reminder),
+            "deadline" => Ok(EventType::Deadline),
+            "default" => Ok(EventType::Default),
+            other => Err(AppError::InvalidToolArgs(format!(
+                "event_type '{}' is invalid; expected interview, meeting, reminder, deadline, or default",
+                other
+            ))),
+        })
+        .transpose()
+}
+
+fn parse_event_status(value: Option<&str>) -> Result<Option<EventStatus>, AppError> {
+    value
+        .map(|raw| match raw.trim() {
+            "confirmed" => Ok(EventStatus::Confirmed),
+            "cancelled" => Ok(EventStatus::Cancelled),
+            "tentative" => Ok(EventStatus::Tentative),
+            other => Err(AppError::InvalidToolArgs(format!(
+                "status '{}' is invalid; expected confirmed, cancelled, or tentative",
+                other
+            ))),
+        })
+        .transpose()
+}
+
+fn parse_clear_fields(value: Option<&[String]>) -> Result<Vec<ClearableEventField>, AppError> {
+    let mut fields = Vec::new();
+    if let Some(raw_fields) = value {
+        for raw in raw_fields {
+            let field = match raw.trim() {
+                "description" => ClearableEventField::Description,
+                "location" => ClearableEventField::Location,
+                "url" => ClearableEventField::Url,
+                other => {
+                    return Err(AppError::InvalidToolArgs(format!(
+                        "clear_fields contains invalid field '{}'; expected description, location, or url",
+                        other
+                    )))
+                }
+            };
+            if fields.contains(&field) {
+                return Err(AppError::InvalidToolArgs(format!(
+                    "clear_fields contains duplicate field '{}'",
+                    raw
+                )));
+            }
+            fields.push(field);
+        }
+    }
+    Ok(fields)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_invalid_event_type_and_status() {
+        assert!(parse_event_type(Some("birthday")).is_err());
+        assert!(parse_event_status(Some("deleted")).is_err());
+        assert_eq!(
+            parse_event_type(Some("meeting")).unwrap(),
+            Some(EventType::Meeting)
+        );
+        assert_eq!(
+            parse_event_status(Some("cancelled")).unwrap(),
+            Some(EventStatus::Cancelled)
+        );
+    }
+
+    #[test]
+    fn validates_hex_color_format() {
+        assert!(validate_color(&Some("#3B82F6".into())).is_ok());
+        assert!(validate_color(&Some("#GGGGGG".into())).is_err());
+        assert!(validate_color(&Some("#123".into())).is_err());
+    }
+
+    #[test]
+    fn validates_url_scheme() {
+        assert!(validate_url(&Some("https://example.com".into())).is_ok());
+        assert!(validate_url(&Some("mailto:team@example.com".into())).is_ok());
+        assert!(validate_url(&Some("javascript:alert(1)".into())).is_err());
+    }
+
+    #[test]
+    fn validates_list_range_limit_and_day_start() {
+        assert!(validate_list_time_range(0, MAX_LIST_RANGE_DAYS * MS_PER_DAY).is_ok());
+        assert!(validate_list_time_range(0, (MAX_LIST_RANGE_DAYS + 1) * MS_PER_DAY).is_err());
+        assert!(validate_day_start_utc(0).is_ok());
+        assert!(validate_day_start_utc(1).is_err());
+    }
+
+    #[test]
+    fn parses_clear_fields_strictly() {
+        let fields = vec!["description".to_string(), "url".to_string()];
+        assert_eq!(
+            parse_clear_fields(Some(fields.as_slice())).unwrap(),
+            vec![ClearableEventField::Description, ClearableEventField::Url]
+        );
+
+        let invalid = vec!["timezone".to_string()];
+        assert!(parse_clear_fields(Some(invalid.as_slice())).is_err());
+    }
 }
 
 // ── Tool implementations ───────────────────────────────────────────────────
@@ -225,7 +379,7 @@ impl CalendarMcpService {
         &self,
         Parameters(args): Parameters<ListEventsArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        validate_time_range(args.start_date, args.end_date)?;
+        validate_list_time_range(args.start_date, args.end_date)?;
 
         let conn = lock_db(&self.db)?;
         let events = event_repo::find_by_date_range(&conn, args.start_date, args.end_date)?;
@@ -275,9 +429,11 @@ impl CalendarMcpService {
     }
 
     /// 创建新事件
-    #[tool(description = "创建新日历事件。title 必填(1-200字符)。start_time/end_time 为 Unix 毫秒时间戳(UTC)，\
+    #[tool(
+        description = "创建新日历事件。title 必填(1-200字符)。start_time/end_time 为 Unix 毫秒时间戳(UTC)，\
         start_time 必须小于 end_time。event_type 可选值: interview(面试)/meeting(会议)/reminder(提醒)/deadline(截止)/default(其他)。\
-        color 格式 #RRGGBB，默认 #3B82F6。创建成功后会实时同步到桌面日历界面。")]
+        color 格式 #RRGGBB，默认 #3B82F6。创建成功后会实时同步到桌面日历界面。"
+    )]
     async fn create_event(
         &self,
         Parameters(args): Parameters<CreateEventArgs>,
@@ -288,6 +444,9 @@ impl CalendarMcpService {
         validate_opt_len(&args.location, "location", MAX_LOCATION_LEN)?;
         validate_opt_len(&args.url, "url", MAX_URL_LEN)?;
         validate_color(&args.color)?;
+        validate_url(&args.url)?;
+        let event_type =
+            parse_event_type(args.event_type.as_deref())?.unwrap_or(EventType::Default);
 
         let conn = lock_db(&self.db)?;
 
@@ -298,11 +457,7 @@ impl CalendarMcpService {
             description: args.description,
             timezone: args.timezone.unwrap_or_else(|| "Asia/Shanghai".into()),
             is_all_day: args.is_all_day.unwrap_or(false),
-            event_type: args
-                .event_type
-                .as_deref()
-                .map(EventType::from_str)
-                .unwrap_or(EventType::Default),
+            event_type,
             color: args.color.unwrap_or_else(|| "#3B82F6".into()),
             location: args.location,
             url: args.url,
@@ -318,9 +473,11 @@ impl CalendarMcpService {
     }
 
     /// 更新已有事件
-    #[tool(description = "更新已有事件。event_id 必填。仅需提供要修改的字段，未提供的字段保持不变。\
+    #[tool(
+        description = "更新已有事件。event_id 必填。仅需提供要修改的字段，未提供的字段保持不变。\
         start_time/end_time 修改时会交叉校验时间合法性。status 可选: confirmed(已确认)/cancelled(已取消)/tentative(待定)。\
-        更新成功后会实时同步到桌面日历界面。")]
+        更新成功后会实时同步到桌面日历界面。"
+    )]
     async fn update_event(
         &self,
         Parameters(args): Parameters<UpdateEventArgs>,
@@ -336,6 +493,10 @@ impl CalendarMcpService {
         validate_opt_len(&args.location, "location", MAX_LOCATION_LEN)?;
         validate_opt_len(&args.url, "url", MAX_URL_LEN)?;
         validate_color(&args.color)?;
+        validate_url(&args.url)?;
+        let event_type = parse_event_type(args.event_type.as_deref())?;
+        let status = parse_event_status(args.status.as_deref())?;
+        let clear_fields = parse_clear_fields(args.clear_fields.as_deref())?;
 
         let conn = lock_db(&self.db)?;
 
@@ -348,11 +509,12 @@ impl CalendarMcpService {
             is_all_day: None,
             rrule: None,
             rrule_until: None,
-            event_type: args.event_type.as_deref().map(EventType::from_str),
+            event_type,
             color: args.color,
             location: args.location,
             url: args.url,
-            status: args.status.as_deref().map(EventStatus::from_str),
+            status,
+            clear_fields,
         };
 
         let event = event_repo::update_event(&conn, &args.event_id, input)?;
@@ -363,8 +525,10 @@ impl CalendarMcpService {
     }
 
     /// 软删除事件（设置 deleted_at）
-    #[tool(description = "软删除事件。设置 deleted_at 时间戳，事件数据保留可恢复。\
-        若事件已被删除或不存在，返回错误提示。删除成功后会实时同步到桌面日历界面。")]
+    #[tool(
+        description = "软删除事件。设置 deleted_at 时间戳，事件数据保留可恢复。\
+        若事件已被删除或不存在，返回错误提示。删除成功后会实时同步到桌面日历界面。"
+    )]
     async fn delete_event(
         &self,
         Parameters(args): Parameters<DeleteEventArgs>,
@@ -390,6 +554,7 @@ impl CalendarMcpService {
         Parameters(args): Parameters<GetFreeSlotsArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         validate_duration_minutes(args.duration_minutes)?;
+        validate_day_start_utc(args.date)?;
 
         let conn = lock_db(&self.db)?;
         let duration = args.duration_minutes as i32;
@@ -442,7 +607,8 @@ impl ServerHandler for CalendarMcpService {
             let meta_str = serde_json::to_string(&r.raw.meta).unwrap_or_default();
             tracing::info!(
                 "[MCP-WIDGET] resources/list item: uri={} _meta={}",
-                r.raw.uri, meta_str
+                r.raw.uri,
+                meta_str
             );
         }
         tracing::info!("[MCP-WIDGET] resources/list: returning {} resources", count);

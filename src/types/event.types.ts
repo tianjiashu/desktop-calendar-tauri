@@ -54,6 +54,7 @@ export interface UpdateEventInput {
   location?: string;
   url?: string;
   status?: EventStatus;
+  clear_fields?: Array<'description' | 'location' | 'url'>;
 }
 
 export interface TimeSlot {

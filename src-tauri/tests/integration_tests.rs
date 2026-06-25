@@ -3,9 +3,9 @@
 
 #[cfg(test)]
 mod tests {
-    use rusqlite::Connection;
     use desktop_calendar_tauri_lib::db::event_repo;
     use desktop_calendar_tauri_lib::models::event::*;
+    use rusqlite::Connection;
 
     /// Create an in-memory SQLite DB with the full schema
     fn setup_test_db() -> Connection {
@@ -40,8 +40,9 @@ mod tests {
             );
             CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
             INSERT OR IGNORE INTO settings (key, value) VALUES ('db_version', '1');
-            PRAGMA foreign_keys=ON;"
-        ).expect("Failed to init schema");
+            PRAGMA foreign_keys=ON;",
+        )
+        .expect("Failed to init schema");
         conn
     }
 
@@ -127,8 +128,8 @@ mod tests {
         event_repo::create_event(&conn, input1).expect("create1 failed");
         event_repo::create_event(&conn, input2).expect("create2 failed");
 
-        let events = event_repo::find_by_date_range(&conn, now, now + hour * 10)
-            .expect("find range failed");
+        let events =
+            event_repo::find_by_date_range(&conn, now, now + hour * 10).expect("find range failed");
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].title, "事件A");
     }
@@ -151,6 +152,26 @@ mod tests {
         assert!(updated.updated_at >= created.updated_at);
         // Other fields unchanged
         assert_eq!(updated.event_type, created.event_type);
+    }
+
+    #[test]
+    fn test_update_event_clears_nullable_fields() {
+        let conn = setup_test_db();
+        let created = event_repo::create_event(&conn, make_create_input()).expect("create failed");
+
+        let update = UpdateEventInput {
+            clear_fields: vec![
+                ClearableEventField::Description,
+                ClearableEventField::Location,
+                ClearableEventField::Url,
+            ],
+            ..Default::default()
+        };
+        let updated = event_repo::update_event(&conn, &created.id, update).expect("update failed");
+
+        assert_eq!(updated.description, None);
+        assert_eq!(updated.location, None);
+        assert_eq!(updated.url, None);
     }
 
     #[test]
@@ -210,8 +231,7 @@ mod tests {
         };
         event_repo::create_event(&conn, input).expect("create failed");
 
-        let slots = event_repo::find_free_slots(&conn, day_start, 60)
-            .expect("free slots failed");
+        let slots = event_repo::find_free_slots(&conn, day_start, 60).expect("free slots failed");
         assert!(!slots.is_empty());
         // Each slot should be at least 60 minutes
         for slot in &slots {

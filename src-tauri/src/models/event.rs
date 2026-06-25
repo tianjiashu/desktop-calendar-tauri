@@ -99,11 +99,11 @@ pub struct Event {
     pub id: String,
     pub title: String,
     pub description: Option<String>,
-    pub start_time: i64,        // Unix milliseconds, UTC
-    pub end_time: i64,          // Unix milliseconds, UTC
+    pub start_time: i64, // Unix milliseconds, UTC
+    pub end_time: i64,   // Unix milliseconds, UTC
     pub timezone: String,
     pub is_all_day: bool,
-    pub rrule: Option<String>,  // RFC 5545
+    pub rrule: Option<String>, // RFC 5545
     pub rrule_until: Option<i64>,
     pub exdates: Option<Vec<i64>>, // JSON array of exception dates
     pub status: EventStatus,
@@ -138,9 +138,15 @@ pub struct CreateEventInput {
     pub url: Option<String>,
 }
 
-fn default_timezone() -> String { "Asia/Shanghai".to_string() }
-fn default_event_type() -> EventType { EventType::Default }
-fn default_color() -> String { "#3B82F6".to_string() }
+fn default_timezone() -> String {
+    "Asia/Shanghai".to_string()
+}
+fn default_event_type() -> EventType {
+    EventType::Default
+}
+fn default_color() -> String {
+    "#3B82F6".to_string()
+}
 
 /// Input for updating an event
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -158,6 +164,17 @@ pub struct UpdateEventInput {
     pub location: Option<String>,
     pub url: Option<String>,
     pub status: Option<EventStatus>,
+    #[serde(default)]
+    pub clear_fields: Vec<ClearableEventField>,
+}
+
+/// Nullable fields that can be explicitly cleared during an update.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum ClearableEventField {
+    Description,
+    Location,
+    Url,
 }
 
 /// Time slot for free slot queries

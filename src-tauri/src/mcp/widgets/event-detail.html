@@ -80,30 +80,70 @@
     function render(ev) {
       try {
         content.innerHTML = '';
-        addRow('标题', ev.title || '-');
-        addRow('时间', fmtRng(ev.start_time, ev.end_time));
-        addRow('类型', tl(ev.event_type));
-        addRow('状态', '<span class="status-badge status-' + (ev.status || 'confirmed') + '">' + sl(ev.status) + '</span>');
-        addRow('地点', ev.location || '-');
-        if (ev.description) addRow('描述', esc(ev.description));
-        if (ev.url) addRow('链接', '<a class="detail-link" href="' + esc(ev.url) + '" target="_blank">' + esc(ev.url) + '</a>');
+        addTextRow('标题', ev.title || '-');
+        addTextRow('时间', fmtRng(ev.start_time, ev.end_time));
+        addTextRow('类型', tl(ev.event_type));
+        addStatusRow('状态', ev.status);
+        addTextRow('地点', ev.location || '-');
+        if (ev.description) addTextRow('描述', ev.description);
+        if (ev.url) addLinkRow('链接', ev.url);
       } catch (e) {
         content.innerHTML = '<div class="error">数据解析失败</div>';
         app.log('error', 'Render error: ' + e.message);
       }
     }
 
-    function addRow(label, value) {
+    function addTextRow(label, value) {
+      addRow(label, document.createTextNode(String(value)));
+    }
+
+    function addStatusRow(label, status) {
+      const safeStatus = ['confirmed', 'cancelled', 'tentative'].includes(status) ? status : 'confirmed';
+      const badge = document.createElement('span');
+      badge.className = 'status-badge status-' + safeStatus;
+      badge.textContent = sl(safeStatus);
+      addRow(label, badge);
+    }
+
+    function addLinkRow(label, url) {
+      const value = String(url);
+      if (!isSafeUrl(value)) {
+        addTextRow(label, value);
+        return;
+      }
+      const link = document.createElement('a');
+      link.className = 'detail-link';
+      link.href = value;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = value;
+      addRow(label, link);
+    }
+
+    function addRow(label, valueNode) {
       const row = document.createElement('div');
       row.className = 'detail-row';
-      row.innerHTML = '<div class="detail-label">' + esc(label) + '</div><div class="detail-value">' + value + '</div>';
-      document.getElementById('content').appendChild(row);
+      const labelEl = document.createElement('div');
+      labelEl.className = 'detail-label';
+      labelEl.textContent = label;
+      const valueEl = document.createElement('div');
+      valueEl.className = 'detail-value';
+      valueEl.appendChild(valueNode);
+      row.append(labelEl, valueEl);
+      content.appendChild(row);
     }
 
     function fmtRng(s, e) { return fmt(s) + ' — ' + fmt(e); }
     function fmt(ms) { if (!ms) return '--:--'; const d = new Date(ms); return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); }
     function p(n) { return n < 10 ? '0' + n : '' + n; }
-    function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function isSafeUrl(value) {
+      try {
+        const parsed = new URL(value);
+        return ['http:', 'https:', 'mailto:'].includes(parsed.protocol);
+      } catch {
+        return false;
+      }
+    }
     function tl(t) { const m = { interview: '面试', meeting: '会议', reminder: '提醒', deadline: '截止', default: '其他' }; return m[t] || t || '-'; }
     function sl(s) { const m = { confirmed: '已确认', cancelled: '已取消', tentative: '待定' }; return m[s] || s || '已确认'; }
   </script>

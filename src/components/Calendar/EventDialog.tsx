@@ -154,13 +154,20 @@ const EventDialog: React.FC<EventDialogProps> = ({
       }
 
       if (editingEvent) {
+        const trimmedDescription = description.trim();
+        const clearFields: UpdateEventInput['clear_fields'] = [];
+        if (!trimmedDescription && editingEvent.description) {
+          clearFields.push('description');
+        }
+
         onUpdate(editingEvent.id, {
           title: title.trim(),
           start_time: startTimeMs,
           end_time: endTimeMs,
           event_type: eventType,
           color,
-          description: description.trim() || undefined,
+          description: trimmedDescription || undefined,
+          clear_fields: clearFields.length ? clearFields : undefined,
         });
       }
     } catch {
