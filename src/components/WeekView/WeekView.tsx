@@ -18,6 +18,10 @@ import { DAY_START_HOUR, DAY_END_HOUR, HOUR_HEIGHT_PX } from '../../constants/wi
 import { MAX_CONCURRENT_EVENTS, countOverlapping } from '../../utils/dragUtils';
 import { showToast } from '../Common/Toast';
 
+const TEXT = {
+  conflictLimit: '\u8be5\u65f6\u6bb5\u5df2\u6709 2 \u4e2a\u4e8b\u4ef6\uff0c\u65e0\u6cd5\u6dfb\u52a0\u66f4\u591a',
+} as const;
+
 interface WeekViewProps {
   currentDate: Date;
   weekTitle: string;
@@ -61,25 +65,19 @@ const WeekView: React.FC<WeekViewProps> = ({
   const dayHeaderRef = useRef<HTMLDivElement>(null);
   const [headerHeight, setHeaderHeight] = useState(46);
   const [snapInfo, setSnapInfo] = useState<SnapInfo>({ edge: null, snappedMinutes: null });
-
   const { updateEvent } = useCalendarStore();
-
-  // ===== Snap forwarding =====
 
   const handleSnapChange = useCallback((info: SnapInfo) => {
     setSnapInfo(info);
   }, []);
 
-  // ===== Drag/resize commit =====
-
   const handleUpdateEvent = useCallback(
     async (id: string, startTime: number, endTime: number) => {
       logger.info(`[WEEKVIEW] updateEvent | id=${id} start=${startTime} end=${endTime}`);
 
-      // Check conflict limit (max 2 concurrent events)
       const overlapping = countOverlapping(events, id, startTime, endTime);
       if (overlapping >= MAX_CONCURRENT_EVENTS) {
-        showToast('该时段已有 2 个事件，无法添加更多');
+        showToast(TEXT.conflictLimit, 'warn');
         throw new Error('CONFLICT_LIMIT');
       }
 
@@ -88,15 +86,9 @@ const WeekView: React.FC<WeekViewProps> = ({
     [events, updateEvent],
   );
 
-  // ===== Double-click empty area → create event =====
-
   const handleDoubleClickEmpty = useCallback(
     (date: Date, startHour: number, startMinute: number, endHour: number, endMinute: number) => {
       logger.info(`[WEEKVIEW] handleDoubleClickEmpty | date=${date.toISOString()} start=${startHour}:${startMinute} end=${endHour}:${endMinute}`);
-      if (!eventDialog) {
-        logger.error(`[WEEKVIEW] eventDialog is null/undefined!`);
-        return;
-      }
       const start = new Date(date);
       start.setHours(startHour, startMinute, 0, 0);
       const end = new Date(date);
@@ -107,11 +99,8 @@ const WeekView: React.FC<WeekViewProps> = ({
     [eventDialog],
   );
 
-  // ===== Keyboard shortcuts =====
-
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't intercept when focus is in an input/textarea/select
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
@@ -157,8 +146,6 @@ const WeekView: React.FC<WeekViewProps> = ({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onPrevWeek, onNextWeek, onToday, onRefresh, onShrink, eventDialog]);
 
-  // ===== Header height measurement =====
-
   const updateHeaderHeight = useCallback(() => {
     if (dayHeaderRef.current) {
       setHeaderHeight(dayHeaderRef.current.offsetHeight);
@@ -188,7 +175,6 @@ const WeekView: React.FC<WeekViewProps> = ({
         onAddEvent={() => eventDialog.openCreateDialog()}
       />
       <div className="week-grid">
-        {/* Time labels column */}
         <div className="time-column">
           <div className="time-spacer" style={{ height: `${headerHeight}px` }} />
           <div className="time-labels-container" style={{ height: `${gridHeight}px`, position: 'relative' }}>
@@ -207,13 +193,13 @@ const WeekView: React.FC<WeekViewProps> = ({
           </div>
         </div>
 
-        {/* Days grid */}
         <div className="days-container">
           {weekDates.map((date, i) => (
             <DayColumn
-              key={i}
+              key={date.toISOString()}
               date={date}
               events={events}
+              isLoading={isLoading}
               onEditEvent={eventDialog.openEditDialog}
               onUpdateEvent={handleUpdateEvent}
               onDoubleClickEmpty={handleDoubleClickEmpty}
@@ -233,7 +219,6 @@ const WeekView: React.FC<WeekViewProps> = ({
         onShowDiagnostics={onShowDiagnostics}
       />
 
-      {/* Event dialog */}
       <EventDialog
         isOpen={eventDialog.isOpen}
         mode={eventDialog.mode}

@@ -1,4 +1,4 @@
-// ========== Day header component (F11) ==========
+// ========== Day header component (F11, Phase F: empty hint) ==========
 
 import React from 'react';
 import { getWeekdayLabel } from '../../utils/dateUtils';
@@ -9,16 +9,19 @@ interface DayHeaderProps {
   eventCount?: number;
 }
 
-/** Check if a date is Saturday or Sunday */
+const TEXT = {
+  event: '\u4e8b\u4ef6',
+} as const;
+
+/** Check if a date is Saturday or Sunday. */
 function isWeekend(date: Date): boolean {
   const day = date.getDay();
   return day === 0 || day === 6;
 }
 
 /**
- * Day column header showing weekday and date number.
+ * Day column header showing weekday, date number, and event count.
  * Today's header is highlighted with accent color.
- * Weekend headers use tertiary text color for visual distinction.
  */
 const DayHeader: React.FC<DayHeaderProps> = ({ date, isToday, eventCount = 0 }) => {
   const weekend = isWeekend(date);
@@ -27,8 +30,10 @@ const DayHeader: React.FC<DayHeaderProps> = ({ date, isToday, eventCount = 0 }) 
     <div className={`day-header ${isToday ? 'today' : ''} ${weekend ? 'weekend' : ''}`}>
       <span className="weekday">{getWeekdayLabel(date)}</span>
       <span className="day-number">{date.getDate()}</span>
-      {eventCount > 0 && (
-        <span className="event-count has-events">{eventCount} 事件</span>
+      {eventCount > 0 ? (
+        <span className="event-count has-events">{eventCount} {TEXT.event}</span>
+      ) : (
+        <span className="event-count event-count-empty" aria-hidden="true">&nbsp;</span>
       )}
     </div>
   );

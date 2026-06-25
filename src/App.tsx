@@ -1,6 +1,7 @@
-// ========== Root App component (Phase 2: sync + diagnostics) ==========
+// ========== Root App component (Phase E: motion transitions) ==========
 
 import React, { useState, useCallback, useEffect } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ErrorBoundary } from './components/Common/ErrorBoundary';
 import BallWidget from './components/Widget/BallWidget';
 import WeekView from './components/WeekView/WeekView';
@@ -16,34 +17,37 @@ import { useTheme } from './hooks/useTheme';
 import { closeToTray } from './utils/windowUtils';
 import './App.css';
 
+// ===== Motion transition constants =====
+const EXIT_DURATION = 0.12;
+const ENTER_WEEK_DURATION = 0.2;
+const EASE = [0.16, 1, 0.3, 1] as const;
+const SPRING = { type: 'spring' as const, stiffness: 350, damping: 28 };
+
 /**
  * Root component managing the two window modes:
- * - Float ball widget mode (120x120px)
+ * - Float ball widget mode (100x100px)
  * - Week view mode (860x780px)
  *
- * Wrapped in ErrorBoundary to catch render crashes.
- * Diagnostic panel (MagnifyingGlass button) available in the status bar.
+ * Phase E: AnimatePresence with #root border-radius morph bridge
+ * for smooth widget ↔ week view transitions.
  */
 const App: React.FC = () => {
+  const shouldReduce = useReducedMotion();
   const { isWidgetMode, toggleExpand, shrinkToWidget } = useWindowManager();
   const navigation = useWeekNavigation();
   const { events, isLoading, error } = useCalendarStore();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const eventDialog = useEventDialog();
 
-  // Theme: 默认跟随系统,支持手动切换
   useTheme();
-
-  // Diagnostics
   const diag = useDiagnostics();
 
-  // Initialize Tauri event listener for real-time sync
   useEffect(() => {
     const { initListener } = useCalendarStore.getState();
     initListener();
   }, []);
 
-  // Toggle root border-radius for widget mode (round) vs week view (square)
+  // Toggle root border-radius for widget mode (Phase E: morph bridge)
   useEffect(() => {
     const root = document.getElementById('root');
     if (root) {
@@ -51,10 +55,8 @@ const App: React.FC = () => {
     }
   }, [isWidgetMode]);
 
-  // Background sync: 30s polling + window focus refresh
   useSync();
 
-  // Fetch events when week changes
   useEffect(() => {
     const fetchForWeek = async () => {
       const { fetchEvents } = useCalendarStore.getState();
@@ -77,35 +79,77 @@ const App: React.FC = () => {
     closeToTray();
   }, []);
 
-  const content = isWidgetMode ? (
-    <div className="app-container">
-      <BallWidget onDoubleClick={toggleExpand} events={events} />
-    </div>
-  ) : (
-    <div className="app-container">
-      <WeekView
-        currentDate={navigation.currentDate}
-        weekTitle={navigation.weekTitle}
-        isCurrentWeek={navigation.isCurrentWeek}
-        events={events}
-        isLoading={isLoading}
-        error={error}
-        isRefreshing={isRefreshing}
-        onPrevWeek={navigation.goToPrevWeek}
-        onNextWeek={navigation.goToNextWeek}
-        onToday={navigation.goToToday}
-        onRefresh={handleRefresh}
-        onShrink={shrinkToWidget}
-        onClose={handleClose}
-        onShowDiagnostics={diag.toggle}
-        eventDialog={eventDialog}
-      />
-    </div>
-  );
-
   return (
     <ErrorBoundary>
-      {content}
+      <AnimatePresence mode="wait">
+        {isWidgetMode ? (
+          <motion.div
+            key="widget"
+            className="app-container"
+            initial={shouldReduce
+              ? { opacity: 0 }
+              : { scale: 0.8, opacity: 0, filter: 'blur(3px)' }
+            }
+            animate={
+              shouldReduce
+                ? { opacity: 1 }
+                : { scale: 1, opacity: 1, filter: 'blur(0px)' }
+            }
+            exit={shouldReduce
+              ? { opacity: 0 }
+              : { scale: 1.06, opacity: 0, filter: 'blur(3px)' }
+            }
+            transition={
+              shouldReduce
+                ? { duration: 0 }
+                : { ...SPRING }
+            }
+          >
+            <BallWidget onDoubleClick={toggleExpand} events={events} />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="week"
+            className="app-container"
+            initial={shouldReduce
+              ? { opacity: 0 }
+              : { scale: 0.97, opacity: 0, filter: 'blur(2px)' }
+            }
+            animate={
+              shouldReduce
+                ? { opacity: 1 }
+                : { scale: 1, opacity: 1, filter: 'blur(0px)' }
+            }
+            exit={shouldReduce
+              ? { opacity: 0 }
+              : { scale: 0.97, opacity: 0, filter: 'blur(2px)' }
+            }
+            transition={
+              shouldReduce
+                ? { duration: 0 }
+                : { duration: ENTER_WEEK_DURATION, ease: EASE }
+            }
+          >
+            <WeekView
+              currentDate={navigation.currentDate}
+              weekTitle={navigation.weekTitle}
+              isCurrentWeek={navigation.isCurrentWeek}
+              events={events}
+              isLoading={isLoading}
+              error={error}
+              isRefreshing={isRefreshing}
+              onPrevWeek={navigation.goToPrevWeek}
+              onNextWeek={navigation.goToNextWeek}
+              onToday={navigation.goToToday}
+              onRefresh={handleRefresh}
+              onShrink={shrinkToWidget}
+              onClose={handleClose}
+              onShowDiagnostics={diag.toggle}
+              eventDialog={eventDialog}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
       <ToastContainer />
       {diag.isVisible && (
         <DiagnosticPanel

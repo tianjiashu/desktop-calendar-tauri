@@ -13,9 +13,22 @@ interface StatusBarProps {
   onShowDiagnostics?: () => void;
 }
 
-/**
- * Theme toggle button: cycles Light → Dark → System.
- */
+const TEXT = {
+  themeLabel: {
+    light: '\u6d45\u8272',
+    dark: '\u6df1\u8272',
+    system: '\u8ddf\u968f\u7cfb\u7edf',
+  },
+  themePrefix: '\u5f53\u524d\u4e3b\u9898',
+  switchTheme: '\u70b9\u51fb\u5207\u6362',
+  details: '\u70b9\u51fb\u67e5\u770b\u8be6\u60c5',
+  loading: '\u52a0\u8f7d\u4e2d...',
+  eventUnit: '\u4e2a\u4e8b\u4ef6',
+  currentWeek: '\u672c\u5468',
+  otherWeek: '\u5176\u4ed6\u5468',
+  diagnostics: '\u8bca\u65ad\u4fe1\u606f',
+} as const;
+
 const ThemeToggle: React.FC = () => {
   const { theme, setTheme } = useTheme();
 
@@ -25,20 +38,14 @@ const ThemeToggle: React.FC = () => {
     else setTheme('light');
   }, [theme, setTheme]);
 
+  const label = `${TEXT.themePrefix}: ${TEXT.themeLabel[theme]}, ${TEXT.switchTheme}`;
+
   return (
     <button
+      className="status-icon-btn"
       onClick={cycle}
-      style={{
-        background: 'none',
-        border: 'none',
-        cursor: 'pointer',
-        padding: '2px',
-        color: 'var(--text-tertiary)',
-        display: 'flex',
-        alignItems: 'center',
-      }}
-      title={`当前主题: ${theme}，点击切换`}
-      aria-label={`当前主题: ${theme}，点击切换`}
+      title={label}
+      aria-label={label}
     >
       {theme === 'light' && <Sun size={14} weight="fill" />}
       {theme === 'dark' && <Moon size={14} weight="fill" />}
@@ -48,9 +55,8 @@ const ThemeToggle: React.FC = () => {
 };
 
 /**
- * Status bar displaying ready / loading / error states.
- * Errors are clickable to show full details.
- * Right side: theme toggle + diagnostics button.
+ * Status bar displaying ready, loading, and error states.
+ * Right side hosts theme toggle and diagnostics.
  */
 const StatusBar: React.FC<StatusBarProps> = ({
   error,
@@ -67,46 +73,39 @@ const StatusBar: React.FC<StatusBarProps> = ({
 
   return (
     <div className="status-bar">
-      <div style={{ flex: 1 }}>
+      <div className="status-main">
         {error ? (
           <span
             className="status-error"
             onClick={handleErrorClick}
-            style={{ cursor: 'pointer', userSelect: 'text', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-            title="点击查看详情"
+            title={TEXT.details}
+            role="button"
+            tabIndex={0}
           >
             <Warning size={14} weight="fill" />
-            {expanded ? `${error.code}: ${error.message}` : error.message}
-            {error.details && expanded && (
-              <span style={{ display: 'block', fontSize: '10px', opacity: 0.8, marginTop: '2px' }}>
+            {expanded ? `${String(error.code)}: ${String(error.message)}` : String(error.message)}
+            {Boolean(error.details) && expanded && (
+              <span className="status-error-details">
                 {String(error.details)}
               </span>
             )}
           </span>
         ) : isLoading ? (
-          <span className="status-loading">加载中...</span>
+          <span className="status-loading">{TEXT.loading}</span>
         ) : (
           <span className="status-ready">
-            {eventCount} 个事件 · {isCurrentWeek ? '本周' : '其他周'}
+            {eventCount} {TEXT.eventUnit} {'\u00b7'} {isCurrentWeek ? TEXT.currentWeek : TEXT.otherWeek}
           </span>
         )}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+      <div className="status-actions">
         <ThemeToggle />
         {onShowDiagnostics && (
           <button
+            className="status-icon-btn"
             onClick={onShowDiagnostics}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '2px',
-              color: 'var(--text-tertiary)',
-              display: 'flex',
-              alignItems: 'center',
-            }}
-            title="诊断信息"
-            aria-label="诊断信息"
+            title={TEXT.diagnostics}
+            aria-label={TEXT.diagnostics}
           >
             <MagnifyingGlass size={16} weight="regular" />
           </button>

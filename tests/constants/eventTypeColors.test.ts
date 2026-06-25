@@ -5,23 +5,23 @@ import { EVENT_TYPE_COLORS, EVENT_TYPE_LABELS } from '../../src/constants/eventT
 
 describe('EVENT_TYPE_COLORS', () => {
   it('has color for interview', () => {
-    expect(EVENT_TYPE_COLORS.interview).toBe('#3B82F6');
+    expect(EVENT_TYPE_COLORS.interview).toBe('#4f6bed');
   });
 
   it('has color for meeting', () => {
-    expect(EVENT_TYPE_COLORS.meeting).toBe('#10B981');
+    expect(EVENT_TYPE_COLORS.meeting).toBe('#10b981');
   });
 
   it('has color for reminder', () => {
-    expect(EVENT_TYPE_COLORS.reminder).toBe('#F59E0B');
+    expect(EVENT_TYPE_COLORS.reminder).toBe('#f59e0b');
   });
 
   it('has color for deadline', () => {
-    expect(EVENT_TYPE_COLORS.deadline).toBe('#EF4444');
+    expect(EVENT_TYPE_COLORS.deadline).toBe('#ef4444');
   });
 
   it('has color for default', () => {
-    expect(EVENT_TYPE_COLORS.default).toBe('#6B7280');
+    expect(EVENT_TYPE_COLORS.default).toBe('#64748b');
   });
 
   it('all colors are valid hex', () => {

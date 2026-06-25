@@ -1,9 +1,4 @@
-// ========== Diagnostic overlay panel ==========
-//
-// 颜色说明：诊断面板始终使用暗色主题（开发者向，暗色更聚焦），
-// 不受全局 light/dark 主题影响。
-// 以下颜色与 index.css 中 .dark 模式的 token 值一致。
-// Phase F 将用 shadcn Dialog 重构此面板。
+// ========== Diagnostic overlay panel (Phase F: structured sections + log level badges) ==========
 
 import React from 'react';
 import {
@@ -20,22 +15,6 @@ import {
 } from '@phosphor-icons/react';
 import type { SystemDiagnostic, DiagnosticEntry } from '../../types/diagnostic.types';
 
-// ===== 暗色主题常量（对齐 .dark token 值） =====
-
-/** 面板内文字色（暗色背景） */
-const TEXT_DARK = '#e5e7eb';        // ≈ text-primary in .dark
-const TEXT_DIM = '#9ca3af';        // ≈ text-tertiary in .dark
-const TEXT_MUTED = '#6b7280';      // ≈ text-tertiary 更深
-const SUCCESS = '#10b981';         // event-meeting 翡翠绿
-const ERROR = '#ef4444';           // event-deadline 警示红
-const WARNING = '#f59e0b';         // event-reminder 琥珀
-const BTN_BG = '#374151';         // 按钮背景
-const PANEL_BG = 'rgba(20, 20, 30, 0.97)';
-const OVERLAY_BG = 'rgba(0, 0, 0, 0.6)';
-const BORDER_FAINT = 'rgba(255, 255, 255, 0.1)';
-const BORDER_DIVIDER = 'rgba(255, 255, 255, 0.05)';
-const CODE_BG = 'rgba(0, 0, 0, 0.3)';
-
 interface DiagnosticPanelProps {
   diagnostic: SystemDiagnostic | null;
   isLoading: boolean;
@@ -43,46 +22,44 @@ interface DiagnosticPanelProps {
   onClose: () => void;
 }
 
-const sectionStyle: React.CSSProperties = {
-  marginBottom: '12px',
+type LogLevelTone = {
+  color: string;
+  background: string;
 };
 
-const labelStyle: React.CSSProperties = {
-  fontSize: '11px',
-  color: TEXT_DIM,
-  textTransform: 'uppercase',
-  letterSpacing: '0.5px',
-  marginBottom: '4px',
-  display: 'flex',
-  alignItems: 'center',
-  gap: '4px',
+const TEXT = {
+  title: '\u8bca\u65ad\u4fe1\u606f',
+  refresh: '\u5237\u65b0',
+  refreshing: '\u5237\u65b0\u4e2d...',
+  refreshLabel: '\u5237\u65b0\u8bca\u65ad\u4fe1\u606f',
+  close: '\u5173\u95ed',
+  closeLabel: '\u5173\u95ed\u8bca\u65ad\u4fe1\u606f',
+  loading: '\u52a0\u8f7d\u8bca\u65ad\u4fe1\u606f...',
+  system: '\u7cfb\u7edf\u4fe1\u606f',
+  logDir: '\u65e5\u5fd7\u76ee\u5f55',
+  database: '\u6570\u636e\u5e93',
+  enabled: '\u5df2\u542f\u7528',
+  disabled: '\u672a\u542f\u7528',
+  port: 'MCP \u7aef\u53e3',
+  status: 'MCP \u72b6\u6001',
+  running: '\u8fd0\u884c\u4e2d',
+  stopped: '\u5df2\u505c\u6b62',
+  recentErrors: '\u6700\u8fd1\u9519\u8bef',
+  noErrors: '\u65e0\u9519\u8bef\u8bb0\u5f55',
+  note: '\u5b8c\u6574\u65e5\u5fd7\u6587\u4ef6\u4f4d\u4e8e\u4e0a\u8ff0\u65e5\u5fd7\u76ee\u5f55\u4e2d\uff08JSON \u683c\u5f0f\uff0c\u53ef\u7528 jq \u89e3\u6790\uff09',
+} as const;
+
+const LOG_LEVEL_TONES: Record<string, LogLevelTone> = {
+  PANIC: { color: 'var(--event-deadline)', background: 'rgb(239 68 68 / 0.20)' },
+  ERROR: { color: '#fb923c', background: 'rgb(249 115 22 / 0.20)' },
+  WARN: { color: 'var(--event-reminder)', background: 'rgb(245 158 11 / 0.20)' },
+  INFO: { color: 'var(--accent-400)', background: 'rgb(96 165 250 / 0.20)' },
 };
 
-const valueStyle: React.CSSProperties = {
-  fontSize: '13px',
-  color: TEXT_DARK,
-  fontFamily: "'Geist Mono', monospace",
-  wordBreak: 'break-all',
-};
+function getLevelTone(level: string): LogLevelTone {
+  return LOG_LEVEL_TONES[level] ?? LOG_LEVEL_TONES.INFO;
+}
 
-/** DiagnosticPanel header button base style */
-const btnStyle: React.CSSProperties = {
-  background: BTN_BG,
-  color: TEXT_DARK,
-  border: 'none',
-  padding: '4px 10px',
-  borderRadius: '6px',
-  cursor: 'pointer',
-  fontSize: '12px',
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: '4px',
-};
-
-/**
- * Overlay panel showing system diagnostics: log paths, DB status, MCP status,
- * recent error log entries. Opened via MagnifyingGlass button in the status bar.
- */
 const DiagnosticPanel: React.FC<DiagnosticPanelProps> = ({
   diagnostic,
   isLoading,
@@ -90,124 +67,114 @@ const DiagnosticPanel: React.FC<DiagnosticPanelProps> = ({
   onClose,
 }) => {
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 9999,
-        background: OVERLAY_BG,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        style={{
-          width: '520px',
-          maxHeight: '80vh',
-          overflow: 'auto',
-          background: PANEL_BG,
-          backdropFilter: 'blur(16px)',
-          borderRadius: '16px',
-          border: `1px solid ${BORDER_FAINT}`,
-          padding: '20px',
-          color: TEXT_DARK,
-          fontFamily: "'Geist Mono', monospace",
-          fontSize: '12px',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <span style={{ fontSize: '16px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-            <MagnifyingGlass size={18} weight="regular" /> 诊断信息
-          </span>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={onRefresh} disabled={isLoading} style={btnStyle}>
+    <div className="diagnostic-overlay" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <section className="diagnostic-panel" role="dialog" aria-modal="true" aria-label={TEXT.title} onClick={(e) => e.stopPropagation()}>
+        <header className="diagnostic-header">
+          <h2 className="diagnostic-title">
+            <MagnifyingGlass size={18} weight="regular" aria-hidden="true" />
+            {TEXT.title}
+          </h2>
+          <div className="diagnostic-actions">
+            <button className="diagnostic-btn" onClick={onRefresh} disabled={isLoading} title={TEXT.refresh} aria-label={TEXT.refreshLabel}>
               {isLoading ? <CircleNotch size={14} weight="regular" className="animate-spin-refresh" /> : <ArrowsClockwise size={14} weight="regular" />}
-              {isLoading ? '刷新中...' : '刷新'}
+              {isLoading ? TEXT.refreshing : TEXT.refresh}
             </button>
-            <button onClick={onClose} style={btnStyle}>
-              <X size={14} weight="regular" /> 关闭
+            <button className="diagnostic-btn" onClick={onClose} title={TEXT.close} aria-label={TEXT.closeLabel}>
+              <X size={14} weight="regular" />
+              {TEXT.close}
             </button>
           </div>
-        </div>
+        </header>
 
         {isLoading && !diagnostic ? (
-          <div style={{ textAlign: 'center', padding: '24px', color: TEXT_DIM }}>加载诊断信息...</div>
+          <div className="diagnostic-empty">{TEXT.loading}</div>
         ) : diagnostic ? (
-          <>
-            {/* System info */}
-            <div style={sectionStyle}>
-              <div style={labelStyle}><Folder size={14} weight="regular" /> 日志目录</div>
-              <div style={valueStyle}>{diagnostic.log_dir}</div>
-            </div>
-            <div style={sectionStyle}>
-              <div style={labelStyle}><Database size={14} weight="regular" /> 数据库路径</div>
-              <div style={valueStyle}>{diagnostic.db_path}</div>
-            </div>
-            <div style={{ display: 'flex', gap: '24px', ...sectionStyle }}>
-              <div>
-                <div style={labelStyle}>DB WAL</div>
-                <div style={{ ...valueStyle, color: diagnostic.db_wal_enabled ? SUCCESS : ERROR, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                  {diagnostic.db_wal_enabled
-                    ? <><CheckCircle size={14} weight="fill" /> 已启用</>
-                    : <><XCircle size={14} weight="fill" /> 未启用</>}
-                </div>
+          <div className="diagnostic-content">
+            <section className="diagnostic-section">
+              <h3 className="diagnostic-section-title">
+                <Folder size={14} weight="regular" aria-hidden="true" />
+                {TEXT.system}
+              </h3>
+              <div className="diagnostic-path-row">
+                <span>{TEXT.logDir}</span>
+                <code>{diagnostic.log_dir}</code>
               </div>
-              <div>
-                <div style={labelStyle}>MCP 端口</div>
-                <div style={valueStyle}>{diagnostic.mcp_port}</div>
+              <div className="diagnostic-path-row">
+                <Database size={12} weight="regular" aria-hidden="true" />
+                <span>{TEXT.database}</span>
+                <code>{diagnostic.db_path}</code>
               </div>
-              <div>
-                <div style={labelStyle}>MCP 状态</div>
-                <div style={{ ...valueStyle, color: diagnostic.mcp_running ? SUCCESS : ERROR, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                  {diagnostic.mcp_running
-                    ? <><CheckCircle size={14} weight="fill" /> 运行中</>
-                    : <><XCircle size={14} weight="fill" /> 已停止</>}
-                </div>
-              </div>
-            </div>
+            </section>
 
-            {/* Recent errors */}
-            <div style={sectionStyle}>
-              <div style={labelStyle}>
-                <Lightning size={14} weight="fill" /> 最近错误 ({diagnostic.recent_errors.length})
+            <section className="diagnostic-section diagnostic-status-grid">
+              <StatusMetric label="DB WAL" active={diagnostic.db_wal_enabled} activeText={TEXT.enabled} inactiveText={TEXT.disabled} />
+              <div>
+                <div className="diagnostic-section-title">{TEXT.port}</div>
+                <div className="diagnostic-value">{diagnostic.mcp_port}</div>
               </div>
+              <StatusMetric label={TEXT.status} active={diagnostic.mcp_running} activeText={TEXT.running} inactiveText={TEXT.stopped} />
+            </section>
+
+            <section className="diagnostic-section">
+              <h3 className="diagnostic-section-title">
+                <Lightning size={14} weight="fill" aria-hidden="true" />
+                {TEXT.recentErrors} ({diagnostic.recent_errors.length})
+              </h3>
               {diagnostic.recent_errors.length === 0 ? (
-                <div style={{ color: TEXT_DIM, fontSize: '12px', marginTop: '4px' }}>无错误记录</div>
+                <div className="diagnostic-empty-inline">{TEXT.noErrors}</div>
               ) : (
-                <div style={{ maxHeight: '200px', overflow: 'auto', background: CODE_BG, borderRadius: '8px', padding: '8px' }}>
-                  {diagnostic.recent_errors.map((entry: DiagnosticEntry, i: number) => (
-                    <div key={i} style={{
-                      padding: '4px 0',
-                      borderBottom: i < diagnostic.recent_errors.length - 1 ? `1px solid ${BORDER_DIVIDER}` : 'none',
-                    }}>
-                      <div style={{ color: TEXT_DIM, fontSize: '10px' }}>
-                        {entry.timestamp} [{entry.level}] {entry.module}
-                      </div>
-                      <div style={{
-                        color: entry.level === 'PANIC' ? ERROR : WARNING,
-                        fontSize: '12px',
-                        marginTop: '2px',
-                        wordBreak: 'break-word',
-                      }}>
-                        {entry.message}
-                      </div>
-                    </div>
+                <div className="diagnostic-log-list">
+                  {diagnostic.recent_errors.map((entry: DiagnosticEntry, index: number) => (
+                    <LogEntry key={`${entry.timestamp}-${index}`} entry={entry} />
                   ))}
                 </div>
               )}
-            </div>
+            </section>
 
-            <div style={{ fontSize: '10px', color: TEXT_MUTED, marginTop: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-              <Lightbulb size={12} weight="fill" /> 完整日志文件位于上述日志目录中（JSON 格式，可用 jq 解析）
-            </div>
-          </>
+            <p className="diagnostic-note">
+              <Lightbulb size={12} weight="fill" aria-hidden="true" />
+              {TEXT.note}
+            </p>
+          </div>
         ) : null}
-      </div>
+      </section>
     </div>
+  );
+};
+
+interface StatusMetricProps {
+  label: string;
+  active: boolean;
+  activeText: string;
+  inactiveText: string;
+}
+
+const StatusMetric: React.FC<StatusMetricProps> = ({ label, active, activeText, inactiveText }) => (
+  <div>
+    <div className="diagnostic-section-title">{label}</div>
+    <div className={`diagnostic-status ${active ? 'is-active' : 'is-inactive'}`}>
+      {active ? <CheckCircle size={14} weight="fill" /> : <XCircle size={14} weight="fill" />}
+      {active ? activeText : inactiveText}
+    </div>
+  </div>
+);
+
+const LogEntry: React.FC<{ entry: DiagnosticEntry }> = ({ entry }) => {
+  const tone = getLevelTone(entry.level);
+
+  return (
+    <article className="diagnostic-log-entry">
+      <div className="diagnostic-log-meta">
+        <span>{entry.timestamp}</span>
+        <span className="diagnostic-log-badge" style={{ color: tone.color, background: tone.background }}>
+          {entry.level}
+        </span>
+        <span>{entry.module}</span>
+      </div>
+      <div className="diagnostic-log-message" style={{ color: tone.color }}>
+        {entry.message}
+      </div>
+    </article>
   );
 };
 

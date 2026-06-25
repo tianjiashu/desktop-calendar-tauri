@@ -5,13 +5,14 @@ import { getWeekdayLabel } from '../../utils/dateUtils';
 import { useDragMove } from '../../hooks/useDragMove';
 import { logger } from '../../utils/logger';
 import type { CalendarEvent } from '../../types';
+import CalendarCardScene3D from './CalendarCardScene3D';
 
 interface BallWidgetProps {
   onDoubleClick: () => void;
   events: CalendarEvent[];
 }
 
-/** Get today's events sorted by start time */
+/** Get today's events sorted by start time. */
 function getTodayEvents(events: CalendarEvent[]): CalendarEvent[] {
   const today = new Date();
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
@@ -22,7 +23,7 @@ function getTodayEvents(events: CalendarEvent[]): CalendarEvent[] {
     .sort((a, b) => a.start_time - b.start_time);
 }
 
-/** Determine event status color based on current time */
+/** Determine event status color based on current time. */
 function getEventStatusColor(event: CalendarEvent): string {
   const now = Date.now();
   if (event.end_time < now) return 'var(--event-deadline)';
@@ -31,24 +32,19 @@ function getEventStatusColor(event: CalendarEvent): string {
 }
 
 /**
- * Floating ball widget showing today's date, weekday, and event indicators.
- * Features:
- * - Radial gradient background with glassmorphism
- * - 3-dot event density indicator (max 3 dots, colored by event status)
- * - Hover scale feedback
- * - Drag to move (delegated to useDragMove hook)
- * - Double-click expands to week view (F2)
+ * Floating widget showing today's date, weekday, and event indicators.
+ * The calendar card itself is rendered by Three.js, while labels stay as DOM text.
  */
 const BallWidget: React.FC<BallWidgetProps> = ({ onDoubleClick, events }) => {
   const { onMouseDown, onMouseMove, onMouseUp } = useDragMove();
-
   const today = useMemo(() => new Date(), []);
   const todayEvents = useMemo(() => getTodayEvents(events), [events]);
+  const ariaLabel = `\u4eca\u65e5 ${todayEvents.length} \u4e2a\u4e8b\u4ef6\uff0c\u53cc\u51fb\u5c55\u5f00`;
 
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     onMouseUp();
-    logger.info('BallWidget double-clicked → toggleExpand');
+    logger.info('Calendar widget double-clicked: toggleExpand');
     onDoubleClick();
   }, [onDoubleClick, onMouseUp]);
 
@@ -61,10 +57,13 @@ const BallWidget: React.FC<BallWidgetProps> = ({ onDoubleClick, events }) => {
       onMouseLeave={onMouseUp}
       onDoubleClick={handleDoubleClick}
       role="button"
-      aria-label={`今日 ${todayEvents.length} 个事件，双击展开`}
+      aria-label={ariaLabel}
     >
-      <div className="ball-date">{today.getDate()}</div>
-      <div className="ball-weekday">{getWeekdayLabel(today)}</div>
+      <CalendarCardScene3D />
+      <div className="ball-content">
+        <div className="ball-date">{today.getDate()}</div>
+        <div className="ball-weekday">{getWeekdayLabel(today)}</div>
+      </div>
       {todayEvents.length > 0 && (
         <div className="event-indicators">
           {todayEvents.slice(0, 3).map(event => (

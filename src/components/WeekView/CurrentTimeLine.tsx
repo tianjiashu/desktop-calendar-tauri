@@ -1,6 +1,8 @@
-// ========== Current time red line (F12) ==========
+// ========== Current time red line (F12, Phase E: pulse animation) ==========
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
+import { CaretRight } from '@phosphor-icons/react';
 import { DAY_START_HOUR, DAY_END_HOUR, HOUR_HEIGHT_PX } from '../../constants/windowConfig';
 
 /** Refresh interval: once per minute */
@@ -15,10 +17,10 @@ interface CurrentTimeLineProps {
  * Ticks at whole-minute boundaries (not arbitrary offsets).
  * Hidden when current time is outside the visible range.
  *
- * Rendered inside .days-container, offset by headerHeight
- * so it aligns with the time-grid area (below day headers).
+ * Phase E: pulse breathing animation (2s cycle).
  */
 const CurrentTimeLine: React.FC<CurrentTimeLineProps> = ({ headerHeight }) => {
+  const shouldReduce = useReducedMotion();
   const [position, setPosition] = useState(-1);
   const [timeLabel, setTimeLabel] = useState('');
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -36,7 +38,6 @@ const CurrentTimeLine: React.FC<CurrentTimeLineProps> = ({ headerHeight }) => {
 
     const totalMinutes = (hours - DAY_START_HOUR) * 60 + minutes;
     const pos = (totalMinutes / 60) * HOUR_HEIGHT_PX;
-    // Offset by header height so line aligns with time-grid (not days-container top)
     setPosition(pos + headerHeight);
     setTimeLabel(`${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`);
   }, [headerHeight]);
@@ -63,7 +64,14 @@ const CurrentTimeLine: React.FC<CurrentTimeLineProps> = ({ headerHeight }) => {
 
   return (
     <>
-      <div className="current-time-line" style={{ top: `${position}px` }} />
+      <motion.div
+        className="current-time-line"
+        style={{ top: `${position}px` }}
+        animate={shouldReduce ? {} : { opacity: [1, 0.6, 1] }}
+        transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+      >
+        <CaretRight size={12} weight="fill" className="current-time-caret" aria-hidden="true" />
+      </motion.div>
       <div className="current-time-label" style={{ top: `${position}px` }}>
         {timeLabel}
       </div>

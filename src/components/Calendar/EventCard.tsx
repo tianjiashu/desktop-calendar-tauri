@@ -8,6 +8,7 @@ import { EVENT_TYPE_COLORS } from '../../constants/eventTypeColors';
 import EventIcon from './EventIcon';
 import EventTooltip from './EventTooltip';
 import { getTooltipPosition } from '../../utils/tooltipPosition';
+import type { TooltipPosition } from '../../utils/tooltipPosition';
 import {
   calculateTimePosition,
   calculateDurationHeight,
@@ -47,7 +48,7 @@ const EventCard: React.FC<EventCardProps> = React.memo(({
   onSnapChange,
 }) => {
   const [tooltipVisible, setTooltipVisible] = useState(false);
-  const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0, placement: 'bottom' as const });
+  const [tooltipPos, setTooltipPos] = useState<TooltipPosition>({ top: 0, left: 0, placement: 'bottom' });
   const cardRef = useRef<HTMLDivElement>(null);
   const noopUpdate = useCallback(() => {}, []);
   const effectiveOnUpdate = onUpdate || noopUpdate;

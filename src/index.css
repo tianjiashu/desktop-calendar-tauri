@@ -116,17 +116,26 @@ html, body, #root {
   height: 100%;
   overflow: hidden;
   font-family: 'Geist Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  background: var(--bg-base);
   color: var(--text-primary);
   user-select: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+html,
+body,
+#root {
+  background: transparent;
+}
+
+/* Phase E: border-radius morph bridge (widget ↔ week view) */
+#root {
+  transition: border-radius 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 /* In widget mode, clip the square window into a circle */
 #root.widget-mode {
   border-radius: 50%;
-  overflow: hidden;
 }
 
 /* ========== Pulse animation for event indicator ========== */
@@ -152,4 +161,11 @@ html, body, #root {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ========== Focus ring (a11y) ========== */
+*:focus-visible {
+  outline: 2px solid var(--accent-500);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }

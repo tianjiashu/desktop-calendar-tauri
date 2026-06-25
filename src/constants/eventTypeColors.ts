@@ -5,17 +5,17 @@
 import type { EventType } from '../types';
 
 export const EVENT_TYPE_COLORS: Record<EventType, string> = {
-  interview: '#4f6bed',  // --event-interview 钢蓝
-  meeting: '#10b981',    // --event-meeting 翡翠绿
-  reminder: '#f59e0b',   // --event-reminder 琥珀
-  deadline: '#ef4444',   // --event-deadline 警示红
-  default: '#64748b',    // --event-default Slate
+  interview: '#4f6bed',  // --event-interview steel blue
+  meeting: '#10b981',    // --event-meeting emerald
+  reminder: '#f59e0b',   // --event-reminder amber
+  deadline: '#ef4444',   // --event-deadline red
+  default: '#64748b',    // --event-default slate
 };
 
 export const EVENT_TYPE_LABELS: Record<EventType, string> = {
-  interview: '面试',
-  meeting: '会议',
-  reminder: '提醒',
-  deadline: '截止',
-  default: '默认',
+  interview: '\u9762\u8bd5',
+  meeting: '\u4f1a\u8bae',
+  reminder: '\u63d0\u9192',
+  deadline: '\u622a\u6b62',
+  default: '\u9ed8\u8ba4',
 };

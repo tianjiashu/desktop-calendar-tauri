@@ -1,7 +1,7 @@
 // ========== Week header component (F3, F4, F6, F22-F25) ==========
 
 import React, { useCallback } from 'react';
-import { CaretLeft, CaretRight, DotCircle, ArrowClockwise, Plus, Minus, X } from '@phosphor-icons/react';
+import { CaretLeft, CaretRight, DotOutline, ArrowClockwise, Plus, Minus, X } from '@phosphor-icons/react';
 
 interface WeekHeaderProps {
   weekTitle: string;
@@ -59,7 +59,7 @@ const WeekHeader: React.FC<WeekHeaderProps> = ({
             title="回到本周"
             aria-label="回到本周"
           >
-            <DotCircle size={14} weight="regular" />
+            <DotOutline size={14} weight="fill" />
             <span>今日</span>
           </button>
         )}

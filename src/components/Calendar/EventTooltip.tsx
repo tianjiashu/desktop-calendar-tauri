@@ -1,4 +1,4 @@
-// ========== Event tooltip component (F17) ==========
+// ========== Event tooltip component (F17, Phase F: created_by info) ==========
 
 import React from 'react';
 import { Link, MapPin } from '@phosphor-icons/react';
@@ -12,9 +12,25 @@ interface EventTooltipProps {
   position: TooltipPosition;
 }
 
+const TEXT = {
+  allDay: '\uff08\u5168\u5929\uff09',
+  type: '\u7c7b\u578b',
+  defaultType: '\u9ed8\u8ba4',
+  byAgent: '\u7531 Agent \u521b\u5efa',
+  byUser: '\u7531\u4f60\u521b\u5efa',
+} as const;
+
+function getUrlLabel(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+}
+
 /**
  * Floating tooltip showing event details on hover.
- * Features left color bar, mono time, type/link/location icons.
+ * Features left color bar, mono time, type/link/location icons, and creator attribution.
  */
 const EventTooltip: React.FC<EventTooltipProps> = ({ event, position }) => {
   const eventColor = event.color || EVENT_TYPE_COLORS[event.event_type] || 'var(--accent-500)';
@@ -31,26 +47,29 @@ const EventTooltip: React.FC<EventTooltipProps> = ({ event, position }) => {
       <div className="tooltip-title">{event.title}</div>
       <div className="tooltip-time">
         {formatTime(event.start_time)} - {formatTime(event.end_time)}
-        {event.is_all_day && '（全天）'}
+        {event.is_all_day && TEXT.allDay}
       </div>
       {event.description && (
         <div className="tooltip-description">{event.description}</div>
       )}
       {event.url && (
-        <div className="tooltip-url" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+        <div className="tooltip-url">
           <Link size={12} weight="regular" aria-hidden="true" />
-          {(() => { try { return new URL(event.url).hostname; } catch { return event.url; } })()}
+          {getUrlLabel(event.url)}
         </div>
       )}
       <div className="tooltip-type">
-        类型：{EVENT_TYPE_LABELS[event.event_type] ?? '默认'}
+        {TEXT.type}: {EVENT_TYPE_LABELS[event.event_type] ?? TEXT.defaultType}
       </div>
       {event.location && (
-        <div className="tooltip-type" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+        <div className="tooltip-meta">
           <MapPin size={12} weight="regular" aria-hidden="true" />
           {event.location}
         </div>
       )}
+      <div className="tooltip-created-by">
+        {event.created_by === 'agent' ? TEXT.byAgent : TEXT.byUser}
+      </div>
     </div>
   );
 };
