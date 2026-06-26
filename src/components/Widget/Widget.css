@@ -1,0 +1,110 @@
+/* ========== Floating Calendar Widget (Phase G: 3D tear-off card) ========== */
+.ball-widget {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-xl);
+  background: transparent;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  position: relative;
+  transition: box-shadow 0.2s, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow:
+    0 10px 24px rgb(15 23 42 / 0.16),
+    0 2px 8px rgb(79 107 237 / 0.16);
+  user-select: none;
+  isolation: isolate;
+}
+
+.ball-widget:hover {
+  transform: scale(1.035);
+  box-shadow:
+    0 14px 30px rgb(15 23 42 / 0.2),
+    0 4px 14px rgb(79 107 237 / 0.2);
+}
+
+.ball-widget:active {
+  cursor: grabbing;
+  transform: scale(1.02);
+}
+
+.calendar-card-scene-3d {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-xl);
+  overflow: visible;
+  z-index: 0;
+}
+
+.calendar-card-scene-3d canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.ball-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translateY(11px);
+  text-shadow:
+    0 1px 1px rgb(15 23 42 / 0.18),
+    0 8px 18px rgb(79 107 237 / 0.12);
+  pointer-events: none;
+}
+
+.ball-date {
+  font-size: 31px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.ball-weekday {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-500);
+  margin-top: 3px;
+}
+
+/* 3-dot event density indicator */
+.event-indicators {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 3px;
+  margin-top: 8px;
+  pointer-events: none;
+}
+
+.event-indicator-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: var(--radius-full);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.72),
+    0 1px 4px rgb(15 23 42 / 0.18);
+}
+
+/* Legacy single indicator — kept for backward compat */
+.event-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--event-reminder);
+  animation: pulse 2s infinite;
+  margin-top: 3px;
+}
+
+/* prefers-reduced-transparency fallback */
+@media (prefers-reduced-transparency: reduce) {
+  .ball-widget {
+    background: var(--bg-elevated);
+  }
+}

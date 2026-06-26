@@ -2,14 +2,19 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock invokeSafe and invokeOrThrow
-vi.mock('../../src/utils/invokeSafe', () => ({
-  invokeSafe: vi.fn(),
-  invokeOrThrow: vi.fn(),
+const mockTauriCommands = vi.hoisted(() => ({
+  listEvents: vi.fn(),
+  createEvent: vi.fn(),
+  updateEvent: vi.fn(),
+  deleteEvent: vi.fn(),
+  getFreeSlots: vi.fn(),
+  getEvent: vi.fn(),
 }));
 
+vi.mock('../../src/services/tauriCommands', () => mockTauriCommands);
+
 import { useCalendarStore } from '../../src/stores/useCalendarStore';
-import { invokeSafe, invokeOrThrow } from '../../src/utils/invokeSafe';
+import * as tauriCommands from '../../src/services/tauriCommands';
 
 describe('useCalendarStore', () => {
   beforeEach(() => {
@@ -43,7 +48,7 @@ describe('useCalendarStore', () => {
   describe('fetchEvents', () => {
     it('sets events on success', async () => {
       const mockEvents = [{ id: '1', title: 'test' }];
-      (invokeSafe as ReturnType<typeof vi.fn>).mockResolvedValue({
+      (tauriCommands.listEvents as ReturnType<typeof vi.fn>).mockResolvedValue({
         ok: true,
         value: mockEvents,
       });
@@ -57,7 +62,7 @@ describe('useCalendarStore', () => {
 
     it('sets error on failure', async () => {
       const mockError = { code: 'INTERNAL', message: 'failed' };
-      (invokeSafe as ReturnType<typeof vi.fn>).mockResolvedValue({
+      (tauriCommands.listEvents as ReturnType<typeof vi.fn>).mockResolvedValue({
         ok: false,
         error: mockError,
       });
@@ -73,7 +78,7 @@ describe('useCalendarStore', () => {
   describe('createEvent', () => {
     it('adds event to state', async () => {
       const newEvent = { id: '1', title: 'new event', start_time: 1000 };
-      (invokeOrThrow as ReturnType<typeof vi.fn>).mockResolvedValue(newEvent);
+      (tauriCommands.createEvent as ReturnType<typeof vi.fn>).mockResolvedValue(newEvent);
 
       const result = await useCalendarStore.getState().createEvent({
         title: 'new event',
@@ -93,7 +98,7 @@ describe('useCalendarStore', () => {
       useCalendarStore.setState({
         events: [{ id: '1', title: 'test', start_time: 1000, end_time: 2000 } as any],
       });
-      (invokeOrThrow as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+      (tauriCommands.deleteEvent as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
 
       await useCalendarStore.getState().deleteEvent('1');
 
@@ -115,7 +120,7 @@ describe('useCalendarStore', () => {
   describe('getFreeSlots', () => {
     it('returns slots on success', async () => {
       const slots = [{ start_time: 1000, end_time: 2000 }];
-      (invokeSafe as ReturnType<typeof vi.fn>).mockResolvedValue({
+      (tauriCommands.getFreeSlots as ReturnType<typeof vi.fn>).mockResolvedValue({
         ok: true,
         value: slots,
       });
@@ -125,7 +130,7 @@ describe('useCalendarStore', () => {
     });
 
     it('returns empty on failure', async () => {
-      (invokeSafe as ReturnType<typeof vi.fn>).mockResolvedValue({
+      (tauriCommands.getFreeSlots as ReturnType<typeof vi.fn>).mockResolvedValue({
         ok: false,
         error: { code: 'INTERNAL', message: 'fail' },
       });
@@ -141,7 +146,7 @@ describe('useCalendarStore', () => {
       useCalendarStore.setState({ events: [existing as any] });
 
       const updated = { id: '1', title: 'new', start_time: 1500, end_time: 2500 };
-      (invokeOrThrow as ReturnType<typeof vi.fn>).mockResolvedValue(updated);
+      (tauriCommands.updateEvent as ReturnType<typeof vi.fn>).mockResolvedValue(updated);
 
       const result = await useCalendarStore.getState().updateEvent('1', {
         title: 'new',

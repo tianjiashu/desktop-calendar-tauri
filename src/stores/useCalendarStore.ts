@@ -3,9 +3,9 @@
 import { create } from 'zustand';
 import type { CalendarEvent, CreateEventInput, UpdateEventInput, TimeSlot } from '../types';
 import { AppError } from '../types/error.types';
-import { invokeSafe, invokeOrThrow } from '../utils/invokeSafe';
 import type { DbChangedEvent } from '../types/sync.types';
 import { logger } from '../utils/logger';
+import * as tauriCommands from '../services/tauriCommands';
 
 let listenerInitialized = false;
 
@@ -39,10 +39,7 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
 
   fetchEvents: async (startDate: number, endDate: number) => {
     set({ isLoading: true, error: null, currentRange: { startDate, endDate } });
-    const result = await invokeSafe<CalendarEvent[]>('list_events', {
-      start_date: startDate,
-      end_date: endDate,
-    });
+    const result = await tauriCommands.listEvents(startDate, endDate);
     if (result.ok) {
       set({ events: result.value, isLoading: false, lastSync: Date.now() });
     } else {
@@ -52,14 +49,14 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
 
   createEvent: async (input: CreateEventInput): Promise<CalendarEvent> => {
     set({ error: null });
-    const event = await invokeOrThrow<CalendarEvent>('create_event', { input });
+    const event = await tauriCommands.createEvent(input);
     set(state => ({ events: [...state.events, event] }));
     return event;
   },
 
   updateEvent: async (id: string, input: UpdateEventInput): Promise<CalendarEvent> => {
     set({ error: null });
-    const updated = await invokeOrThrow<CalendarEvent>('update_event', { id, input });
+    const updated = await tauriCommands.updateEvent(id, input);
     set(state => ({
       events: state.events.map(ev => ev.id === id ? updated : ev),
     }));
@@ -68,7 +65,7 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
 
   deleteEvent: async (id: string): Promise<void> => {
     set({ error: null });
-    await invokeOrThrow<void>('delete_event', { id });
+    await tauriCommands.deleteEvent(id);
     set(state => ({
       events: state.events.filter(ev => ev.id !== id),
     }));
@@ -76,10 +73,7 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
 
   getFreeSlots: async (date: number, durationMinutes: number): Promise<TimeSlot[]> => {
     set({ error: null });
-    const result = await invokeSafe<TimeSlot[]>('get_free_slots', {
-      date,
-      duration_minutes: durationMinutes,
-    });
+    const result = await tauriCommands.getFreeSlots(date, durationMinutes);
     if (result.ok) return result.value;
     set({ error: result.error });
     return [];
@@ -109,7 +103,7 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
 
           if (action === 'create' || action === 'update') {
             // Fetch the event from DB to get full data
-            const result = await invokeSafe<CalendarEvent | null>('get_event', { id });
+            const result = await tauriCommands.getEvent(id);
             if (result.ok && result.value) {
               set(state => ({
                 events: [

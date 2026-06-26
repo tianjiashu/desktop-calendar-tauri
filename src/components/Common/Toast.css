@@ -1,0 +1,72 @@
+/* ========== Toast notification (Phase F: icons + progress bar + hover pause) ========== */
+.toast-container {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast-wrapper {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  max-width: 340px;
+  box-shadow: var(--shadow-md);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.toast {
+  padding: 10px 14px;
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toast--warn {
+  background: var(--bg-elevated);
+}
+
+.toast--info {
+  background: var(--bg-elevated);
+}
+
+.toast--success {
+  background: var(--bg-elevated);
+}
+
+.toast--error {
+  background: var(--bg-elevated);
+}
+
+.toast-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.toast-progress-track {
+  height: 2px;
+  background: var(--border-subtle);
+  width: 100%;
+}
+
+.toast-progress-fill {
+  height: 100%;
+  background: var(--accent-500);
+  transition: width 0.05s linear;
+  will-change: width;
+}

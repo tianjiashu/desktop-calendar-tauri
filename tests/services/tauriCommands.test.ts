@@ -2,11 +2,13 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockInvokeOrThrow } = vi.hoisted(() => ({
+const { mockInvokeSafe, mockInvokeOrThrow } = vi.hoisted(() => ({
+  mockInvokeSafe: vi.fn(),
   mockInvokeOrThrow: vi.fn(),
 }));
 
 vi.mock('../../src/utils/invokeSafe', () => ({
+  invokeSafe: mockInvokeSafe,
   invokeOrThrow: mockInvokeOrThrow,
 }));
 
@@ -33,20 +35,20 @@ describe('tauriCommands', () => {
     expect(mockInvokeOrThrow).toHaveBeenCalledWith('create_event', { input });
   });
 
-  it('getEvent calls invokeOrThrow', async () => {
-    mockInvokeOrThrow.mockResolvedValue({ id: '1' });
+  it('getEvent calls invokeSafe', async () => {
+    mockInvokeSafe.mockResolvedValue({ ok: true, value: { id: '1' } });
 
     await getEvent('1');
 
-    expect(mockInvokeOrThrow).toHaveBeenCalledWith('get_event', { id: '1' });
+    expect(mockInvokeSafe).toHaveBeenCalledWith('get_event', { id: '1' });
   });
 
-  it('listEvents calls invokeOrThrow', async () => {
-    mockInvokeOrThrow.mockResolvedValue([]);
+  it('listEvents calls invokeSafe', async () => {
+    mockInvokeSafe.mockResolvedValue({ ok: true, value: [] });
 
     await listEvents(1000, 2000);
 
-    expect(mockInvokeOrThrow).toHaveBeenCalledWith('list_events', {
+    expect(mockInvokeSafe).toHaveBeenCalledWith('list_events', {
       start_date: 1000,
       end_date: 2000,
     });
@@ -72,12 +74,12 @@ describe('tauriCommands', () => {
     expect(mockInvokeOrThrow).toHaveBeenCalledWith('delete_event', { id: '1' });
   });
 
-  it('getFreeSlots calls invokeOrThrow', async () => {
-    mockInvokeOrThrow.mockResolvedValue([]);
+  it('getFreeSlots calls invokeSafe', async () => {
+    mockInvokeSafe.mockResolvedValue({ ok: true, value: [] });
 
     await getFreeSlots(1000, 30);
 
-    expect(mockInvokeOrThrow).toHaveBeenCalledWith('get_free_slots', {
+    expect(mockInvokeSafe).toHaveBeenCalledWith('get_free_slots', {
       date: 1000,
       duration_minutes: 30,
     });

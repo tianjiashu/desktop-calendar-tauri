@@ -1,6 +1,6 @@
 // ========== Root App component (Phase E: motion transitions) ==========
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ErrorBoundary } from './components/Common/ErrorBoundary';
 import BallWidget from './components/Widget/BallWidget';
@@ -14,6 +14,7 @@ import { useDiagnostics } from './hooks/useDiagnostics';
 import { useSync } from './hooks/useSync';
 import { useEventDialog } from './hooks/useEventDialog';
 import { useTheme } from './hooks/useTheme';
+import { useVisibleWeekEvents } from './hooks/useVisibleWeekEvents';
 import { closeToTray } from './utils/windowUtils';
 import './App.css';
 
@@ -29,14 +30,18 @@ const SPRING = { type: 'spring' as const, stiffness: 350, damping: 28 };
  * - Week view mode (860x780px)
  *
  * Phase E: AnimatePresence with #root border-radius morph bridge
- * for smooth widget ↔ week view transitions.
+ * for smooth widget <-> week view transitions.
  */
 const App: React.FC = () => {
   const shouldReduce = useReducedMotion();
   const { isWidgetMode, isTransitioning, toggleExpand, shrinkToWidget } = useWindowManager();
   const navigation = useWeekNavigation();
   const { events, isLoading, error } = useCalendarStore();
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { isRefreshing, refreshEvents } = useVisibleWeekEvents(
+    navigation.monday,
+    navigation.sunday,
+    isWidgetMode,
+  );
   const eventDialog = useEventDialog();
 
   useTheme();
@@ -56,34 +61,6 @@ const App: React.FC = () => {
   }, [isWidgetMode]);
 
   useSync();
-
-  useEffect(() => {
-    const fetchForWeek = async () => {
-      const { fetchEvents } = useCalendarStore.getState();
-      await fetchEvents(navigation.monday.getTime(), navigation.sunday.getTime());
-    };
-    fetchForWeek();
-  }, [navigation.monday.getTime(), navigation.sunday.getTime()]);
-
-  useEffect(() => {
-    if (isWidgetMode) return;
-
-    const fetchForVisibleWeek = async () => {
-      const { fetchEvents } = useCalendarStore.getState();
-      await fetchEvents(navigation.monday.getTime(), navigation.sunday.getTime());
-    };
-    fetchForVisibleWeek();
-  }, [isWidgetMode, navigation.monday, navigation.sunday]);
-
-  const handleRefresh = useCallback(async () => {
-    setIsRefreshing(true);
-    try {
-      const { fetchEvents } = useCalendarStore.getState();
-      await fetchEvents(navigation.monday.getTime(), navigation.sunday.getTime());
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [navigation.monday, navigation.sunday]);
 
   const handleClose = useCallback(() => {
     closeToTray();
@@ -164,7 +141,7 @@ const App: React.FC = () => {
               onPrevWeek={navigation.goToPrevWeek}
               onNextWeek={navigation.goToNextWeek}
               onToday={navigation.goToToday}
-              onRefresh={handleRefresh}
+              onRefresh={refreshEvents}
               onShrink={shrinkToWidget}
               onClose={handleClose}
               onShowDiagnostics={diag.toggle}
