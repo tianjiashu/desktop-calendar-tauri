@@ -5,6 +5,7 @@
 //   - Parameter deserialization and validation (via serde)
 //   - Tool routing via #[tool_router] on the impl block
 
+use chrono::{FixedOffset, NaiveDate, NaiveDateTime, TimeZone};
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::handler::server::ServerHandler;
 use rmcp::model::{
@@ -45,9 +46,8 @@ const MAX_FREE_SLOT_MINUTES: i64 = 480; // 8 hours
 const MIN_FREE_SLOT_MINUTES: i64 = 5;
 const MS_PER_DAY: i64 = 24 * 60 * 60 * 1000;
 
-/// Example timestamp for error messages: 2026-06-23 14:00 CST in Unix ms.
-/// Pre-computed to avoid unwrap() in validate_time_range hot path.
-const EXAMPLE_TIMESTAMP_MS: i64 = 1750744800000;
+const TIME_FORMAT: &str = "%Y-%m-%d %H:%M";
+const DATE_FORMAT: &str = "%Y-%m-%d";
 
 // ── Widget UI meta (for tool definition _meta.ui.resourceUri) ────────────────
 const UI_EVENTS_LIST: &str = "ui://calendar/events-list";
@@ -58,10 +58,10 @@ const UI_FREE_SLOTS: &str = "ui://calendar/free-slots";
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ListEventsArgs {
-    /// 开始时间 (Unix 毫秒时间戳, UTC)
-    pub start_date: i64,
-    /// 结束时间 (Unix 毫秒时间戳, UTC)。必须大于 start_date，建议范围 ≤ 90 天
-    pub end_date: i64,
+    /// 开始时间，固定格式：YYYY-MM-DD HH:mm，例如 2026-06-15 00:00
+    pub start_time: String,
+    /// 结束时间，固定格式：YYYY-MM-DD HH:mm，例如 2026-06-22 00:00。必须大于 start_time
+    pub end_time: String,
     /// 设为 true 时返回可交互的 Widget UI（在 CodeBuddy/WorkBuddy 中渲染）
     #[serde(default)]
     pub return_ui: bool,
@@ -80,10 +80,10 @@ pub struct GetEventArgs {
 pub struct CreateEventArgs {
     /// 事件标题（1-200 字符，不能为空）
     pub title: String,
-    /// 开始时间 (Unix 毫秒时间戳, UTC)。必须小于 end_time
-    pub start_time: i64,
-    /// 结束时间 (Unix 毫秒时间戳, UTC)。必须大于 start_time
-    pub end_time: i64,
+    /// 开始时间，固定格式：YYYY-MM-DD HH:mm，例如 2026-06-15 10:00
+    pub start_time: String,
+    /// 结束时间，固定格式：YYYY-MM-DD HH:mm，例如 2026-06-15 11:00。必须大于 start_time
+    pub end_time: String,
     /// 事件描述（最长 2000 字符）
     pub description: Option<String>,
     /// 时区标识符，例如 "Asia/Shanghai"。默认 "Asia/Shanghai"
@@ -106,10 +106,10 @@ pub struct UpdateEventArgs {
     pub event_id: String,
     /// 新标题（1-200 字符）
     pub title: Option<String>,
-    /// 新开始时间 (Unix 毫秒时间戳, UTC)
-    pub start_time: Option<i64>,
-    /// 新结束时间 (Unix 毫秒时间戳, UTC)
-    pub end_time: Option<i64>,
+    /// 新开始时间，固定格式：YYYY-MM-DD HH:mm
+    pub start_time: Option<String>,
+    /// 新结束时间，固定格式：YYYY-MM-DD HH:mm
+    pub end_time: Option<String>,
     /// 新描述（最长 2000 字符）
     pub description: Option<String>,
     /// 新类型: "interview"|"meeting"|"reminder"|"deadline"|"default"
@@ -134,8 +134,8 @@ pub struct DeleteEventArgs {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetFreeSlotsArgs {
-    /// 查询日期 (Unix 毫秒时间戳, 当天0点 UTC)
-    pub date: i64,
+    /// 查询日期，固定格式：YYYY-MM-DD，例如 2026-06-15
+    pub date: String,
     /// 需要的时长（分钟）。范围 5-480（8小时）
     pub duration_minutes: i64,
     /// 设为 true 时返回可交互的 Widget UI
@@ -163,12 +163,51 @@ fn validate_title(title: &str) -> Result<(), AppError> {
 fn validate_time_range(start: i64, end: i64) -> Result<(), AppError> {
     if start >= end {
         return Err(AppError::InvalidToolArgs(format!(
-            "start_time({}) 必须小于 end_time({})。时间单位为 Unix 毫秒时间戳(UTC)。\
-             例如: 2026-06-23 14:00 CST 对应 {}。",
-            start, end, EXAMPLE_TIMESTAMP_MS
+            "start_time({}) 必须小于 end_time({})。MCP 时间格式为 YYYY-MM-DD HH:mm，例如 2026-06-23 14:00。",
+            start, end
         )));
     }
     Ok(())
+}
+
+fn shanghai_offset() -> FixedOffset {
+    FixedOffset::east_opt(8 * 3600).expect("valid Asia/Shanghai fixed offset")
+}
+
+fn parse_local_datetime_ms(value: &str, field: &str) -> Result<i64, AppError> {
+    let trimmed = value.trim();
+    let naive = NaiveDateTime::parse_from_str(trimmed, TIME_FORMAT).map_err(|_| {
+        AppError::InvalidToolArgs(format!(
+            "{} 格式错误，应为 YYYY-MM-DD HH:mm，例如 2026-06-15 10:00，当前值：{}",
+            field, value
+        ))
+    })?;
+
+    let local = shanghai_offset()
+        .from_local_datetime(&naive)
+        .single()
+        .ok_or_else(|| AppError::InvalidToolArgs(format!("{} 不是有效时间：{}", field, value)))?;
+
+    Ok(local.timestamp_millis())
+}
+
+fn parse_local_date_start_ms(value: &str, field: &str) -> Result<i64, AppError> {
+    let trimmed = value.trim();
+    let date = NaiveDate::parse_from_str(trimmed, DATE_FORMAT).map_err(|_| {
+        AppError::InvalidToolArgs(format!(
+            "{} 格式错误，应为 YYYY-MM-DD，例如 2026-06-15，当前值：{}",
+            field, value
+        ))
+    })?;
+    let naive = date
+        .and_hms_opt(0, 0, 0)
+        .ok_or_else(|| AppError::InvalidToolArgs(format!("{} 不是有效日期：{}", field, value)))?;
+    let local = shanghai_offset()
+        .from_local_datetime(&naive)
+        .single()
+        .ok_or_else(|| AppError::InvalidToolArgs(format!("{} 不是有效日期：{}", field, value)))?;
+
+    Ok(local.timestamp_millis())
 }
 
 fn validate_list_time_range(start: i64, end: i64) -> Result<(), AppError> {
@@ -182,15 +221,6 @@ fn validate_list_time_range(start: i64, end: i64) -> Result<(), AppError> {
             "list_events range cannot exceed {} days",
             MAX_LIST_RANGE_DAYS
         )));
-    }
-    Ok(())
-}
-
-fn validate_day_start_utc(date: i64) -> Result<(), AppError> {
-    if date.rem_euclid(MS_PER_DAY) != 0 {
-        return Err(AppError::InvalidToolArgs(
-            "date must be the UTC day-start timestamp in Unix milliseconds".into(),
-        ));
     }
     Ok(())
 }
@@ -347,8 +377,16 @@ mod tests {
     fn validates_list_range_limit_and_day_start() {
         assert!(validate_list_time_range(0, MAX_LIST_RANGE_DAYS * MS_PER_DAY).is_ok());
         assert!(validate_list_time_range(0, (MAX_LIST_RANGE_DAYS + 1) * MS_PER_DAY).is_err());
-        assert!(validate_day_start_utc(0).is_ok());
-        assert!(validate_day_start_utc(1).is_err());
+        assert_eq!(
+            parse_local_datetime_ms("2026-06-15 10:00", "start_time").unwrap(),
+            1781488800000
+        );
+        assert!(parse_local_datetime_ms("2026/06/15 10:00", "start_time").is_err());
+        assert_eq!(
+            parse_local_date_start_ms("2026-06-15", "date").unwrap(),
+            1781452800000
+        );
+        assert!(parse_local_date_start_ms("2026/06/15", "date").is_err());
     }
 
     #[test]
@@ -371,7 +409,7 @@ impl CalendarMcpService {
     /// 按日期范围查询事件列表
     #[tool(
         description = "按日期范围查询事件列表。返回指定时间范围内的所有事件（不含已删除）。\
-        start_date/end_date 为 Unix 毫秒时间戳(UTC)。范围过大会影响性能，建议 ≤ 90 天。\
+        start_time/end_time 使用固定格式 YYYY-MM-DD HH:mm，并按 Asia/Shanghai 解读。范围过大会影响性能，建议 ≤ 90 天。\
         设置 return_ui=true 可在对话中渲染交互式周视图卡片。",
         meta = rmcp::model::Meta(serde_json::Map::from_iter([("ui".into(), serde_json::json!({"resourceUri": UI_EVENTS_LIST}))]))
     )]
@@ -379,17 +417,30 @@ impl CalendarMcpService {
         &self,
         Parameters(args): Parameters<ListEventsArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        validate_list_time_range(args.start_date, args.end_date)?;
+        let start_ms = parse_local_datetime_ms(&args.start_time, "start_time")?;
+        let end_ms = parse_local_datetime_ms(&args.end_time, "end_time")?;
+        validate_list_time_range(start_ms, end_ms)?;
+
+        tracing::info!(
+            "[MCP] list_events request | start_time={} end_time={} start_ms={} end_ms={} return_ui={}",
+            args.start_time,
+            args.end_time,
+            start_ms,
+            end_ms,
+            args.return_ui
+        );
 
         let conn = lock_db(&self.db)?;
-        let events = event_repo::find_by_date_range(&conn, args.start_date, args.end_date)?;
+        let events = event_repo::find_by_date_range(&conn, start_ms, end_ms)?;
 
         let data = json!({
             "events": events,
             "count": events.len(),
             "query": {
-                "start_date": args.start_date,
-                "end_date": args.end_date
+                "start_time": args.start_time,
+                "end_time": args.end_time,
+                "start_ms": start_ms,
+                "end_ms": end_ms
             }
         });
         let mut result = text_result(to_text_response(&data));
@@ -435,8 +486,8 @@ impl CalendarMcpService {
 
     /// 创建新事件
     #[tool(
-        description = "创建新日历事件。title 必填(1-200字符)。start_time/end_time 为 Unix 毫秒时间戳(UTC)，\
-        start_time 必须小于 end_time。event_type 可选值: interview(面试)/meeting(会议)/reminder(提醒)/deadline(截止)/default(其他)。\
+        description = "创建新日历事件。title 必填(1-200字符)。start_time/end_time 使用固定格式 YYYY-MM-DD HH:mm，并按 Asia/Shanghai 解读，\
+        start_time 必须小于 end_time。相同时间相同标题不会重复添加；任意时间段最多允许 2 个事件。event_type 可选值: interview(面试)/meeting(会议)/reminder(提醒)/deadline(截止)/default(其他)。\
         color 格式 #RRGGBB，默认 #3B82F6。创建成功后会实时同步到桌面日历界面。"
     )]
     async fn create_event(
@@ -444,7 +495,9 @@ impl CalendarMcpService {
         Parameters(args): Parameters<CreateEventArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         validate_title(&args.title)?;
-        validate_time_range(args.start_time, args.end_time)?;
+        let start_ms = parse_local_datetime_ms(&args.start_time, "start_time")?;
+        let end_ms = parse_local_datetime_ms(&args.end_time, "end_time")?;
+        validate_time_range(start_ms, end_ms)?;
         validate_opt_len(&args.description, "description", MAX_DESC_LEN)?;
         validate_opt_len(&args.location, "location", MAX_LOCATION_LEN)?;
         validate_opt_len(&args.url, "url", MAX_URL_LEN)?;
@@ -453,12 +506,22 @@ impl CalendarMcpService {
         let event_type =
             parse_event_type(args.event_type.as_deref())?.unwrap_or(EventType::Default);
 
+        tracing::info!(
+            "[MCP] create_event request | title={} start_time={} end_time={} start_ms={} end_ms={} type={:?}",
+            args.title,
+            args.start_time,
+            args.end_time,
+            start_ms,
+            end_ms,
+            event_type
+        );
+
         let conn = lock_db(&self.db)?;
 
         let input = CreateEventInput {
             title: args.title.trim().to_string(),
-            start_time: args.start_time,
-            end_time: args.end_time,
+            start_time: start_ms,
+            end_time: end_ms,
             description: args.description,
             timezone: args.timezone.unwrap_or_else(|| "Asia/Shanghai".into()),
             is_all_day: args.is_all_day.unwrap_or(false),
@@ -472,6 +535,13 @@ impl CalendarMcpService {
 
         let event = event_repo::create_event(&conn, input)?;
         emit_db_change(&self.app_handle, "events", "create", &event.id);
+        tracing::info!(
+            "[MCP] create_event success | id={} title={} start_ms={} end_ms={}",
+            event.id,
+            event.title,
+            event.start_time,
+            event.end_time
+        );
 
         let data = json!({ "ok": true, "event": &event });
         Ok(text_result(to_text_response(&data)))
@@ -491,7 +561,17 @@ impl CalendarMcpService {
             validate_title(t)?;
         }
         // 交叉校验：当 start_time 和 end_time 同时提供时，确保 start < end
-        if let (Some(start), Some(end)) = (args.start_time, args.end_time) {
+        let start_ms = args
+            .start_time
+            .as_deref()
+            .map(|value| parse_local_datetime_ms(value, "start_time"))
+            .transpose()?;
+        let end_ms = args
+            .end_time
+            .as_deref()
+            .map(|value| parse_local_datetime_ms(value, "end_time"))
+            .transpose()?;
+        if let (Some(start), Some(end)) = (start_ms, end_ms) {
             validate_time_range(start, end)?;
         }
         validate_opt_len(&args.description, "description", MAX_DESC_LEN)?;
@@ -503,13 +583,22 @@ impl CalendarMcpService {
         let status = parse_event_status(args.status.as_deref())?;
         let clear_fields = parse_clear_fields(args.clear_fields.as_deref())?;
 
+        tracing::info!(
+            "[MCP] update_event request | id={} title_present={} start_ms={:?} end_ms={:?} status={:?}",
+            args.event_id,
+            args.title.is_some(),
+            start_ms,
+            end_ms,
+            status
+        );
+
         let conn = lock_db(&self.db)?;
 
         let input = UpdateEventInput {
             title: args.title.map(|s| s.trim().to_string()),
             description: args.description,
-            start_time: args.start_time,
-            end_time: args.end_time,
+            start_time: start_ms,
+            end_time: end_ms,
             timezone: None,
             is_all_day: None,
             rrule: None,
@@ -524,6 +613,7 @@ impl CalendarMcpService {
 
         let event = event_repo::update_event(&conn, &args.event_id, input)?;
         emit_db_change(&self.app_handle, "events", "update", &event.id);
+        tracing::info!("[MCP] update_event success | id={}", event.id);
 
         let data = json!({ "ok": true, "event": &event });
         Ok(text_result(to_text_response(&data)))
@@ -549,7 +639,7 @@ impl CalendarMcpService {
 
     /// 查询指定日期的空闲时间段
     #[tool(
-        description = "查询指定日期的空闲时间段。date 为查询日期(Unix 毫秒时间戳, 当天0点 UTC)。\
+        description = "查询指定日期的空闲时间段。date 使用固定格式 YYYY-MM-DD，并按 Asia/Shanghai 的当天 00:00 解读。\
         duration_minutes 为需要的时长(分钟)，范围 5-480(8小时)。\
         返回该日期内所有满足 duration_minutes 的空闲槽位。设置 return_ui=true 可在对话中渲染交互式时间槽卡片。",
         meta = rmcp::model::Meta(serde_json::Map::from_iter([("ui".into(), serde_json::json!({"resourceUri": UI_FREE_SLOTS}))]))
@@ -559,17 +649,26 @@ impl CalendarMcpService {
         Parameters(args): Parameters<GetFreeSlotsArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         validate_duration_minutes(args.duration_minutes)?;
-        validate_day_start_utc(args.date)?;
+        let date_ms = parse_local_date_start_ms(&args.date, "date")?;
+
+        tracing::info!(
+            "[MCP] get_free_slots request | date={} date_ms={} duration_minutes={} return_ui={}",
+            args.date,
+            date_ms,
+            args.duration_minutes,
+            args.return_ui
+        );
 
         let conn = lock_db(&self.db)?;
         let duration = args.duration_minutes as i32;
-        let slots = event_repo::find_free_slots(&conn, args.date, duration)?;
+        let slots = event_repo::find_free_slots(&conn, date_ms, duration)?;
 
         let data = json!({
             "free_slots": slots,
             "count": slots.len(),
             "query": {
                 "date": args.date,
+                "date_ms": date_ms,
                 "duration_minutes": args.duration_minutes
             }
         });
@@ -691,7 +790,7 @@ const USAGE_GUIDE: &str = "\
 
 | 工具 | 用途 | 关键参数 |
 |------|------|----------|
-| `list_events` | 按日期范围查询事件 | `start_date`, `end_date` (Unix ms UTC) |
+| `list_events` | 按日期范围查询事件 | `start_time`, `end_time` (YYYY-MM-DD HH:mm) |
 | `get_event` | 获取单个事件详情 | `event_id` |
 | `create_event` | 创建新事件 | `title`, `start_time`, `end_time` (必填) |
 | `update_event` | 更新已有事件 | `event_id` (必填), 其他字段可选 |
@@ -700,9 +799,9 @@ const USAGE_GUIDE: &str = "\
 
 ## 参数约束
 
-- **时间格式**: 所有时间参数为 Unix 毫秒时间戳(UTC)，不是秒。
-  - 示例: 2026-06-23 14:00 CST = 某个毫秒值
-  - 获取当前时间毫秒: `Date.now()` (JS) 或 `time.time()*1000` (Python)
+- **时间格式**: MCP 入参使用固定字符串，按 Asia/Shanghai 解读。
+  - 日期时间: `YYYY-MM-DD HH:mm`，例如 `2026-06-23 14:00`
+  - 日期: `YYYY-MM-DD`，例如 `2026-06-23`
 - **title**: 1-200 字符，不能为空或纯空格
 - **description**: 最长 2000 字符
 - **location**: 最长 500 字符
@@ -725,9 +824,9 @@ CodeBuddy/WorkBuddy 会自动渲染为可交互的 Widget 卡片。
 
 ## 典型场景
 
-1. **查看本周日程**: list_events(start_date=本周一0点, end_date=下周一0点)
-2. **添加会议**: create_event(title=\"团队周会\", start_time=..., end_time=..., event_type=\"meeting\")
-3. **查找空闲**: get_free_slots(date=今天0点, duration_minutes=30)
+1. **查看本周日程**: list_events(start_time=\"2026-06-15 00:00\", end_time=\"2026-06-22 00:00\")
+2. **添加会议**: create_event(title=\"团队周会\", start_time=\"2026-06-15 10:00\", end_time=\"2026-06-15 11:00\", event_type=\"meeting\")
+3. **查找空闲**: get_free_slots(date=\"2026-06-15\", duration_minutes=30)
 4. **修改时间**: update_event(event_id=\"...\", start_time=..., end_time=...)
 5. **取消事件**: update_event(event_id=\"...\", status=\"cancelled\")
 ";

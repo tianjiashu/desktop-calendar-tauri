@@ -15,6 +15,7 @@ interface CalendarStore {
   isLoading: boolean;
   error: AppError | null;
   lastSync: number;
+  currentRange: { startDate: number; endDate: number } | null;
 
   // Actions
   fetchEvents: (startDate: number, endDate: number) => Promise<void>;
@@ -34,9 +35,10 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
   isLoading: false,
   error: null,
   lastSync: 0,
+  currentRange: null,
 
   fetchEvents: async (startDate: number, endDate: number) => {
-    set({ isLoading: true, error: null });
+    set({ isLoading: true, error: null, currentRange: { startDate, endDate } });
     const result = await invokeSafe<CalendarEvent[]>('list_events', {
       start_date: startDate,
       end_date: endDate,
@@ -179,18 +181,9 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
   },
 
   refetch: async () => {
-    const { events } = get();
-    if (events.length === 0) return;
+    const { currentRange } = get();
+    if (!currentRange) return;
 
-    // Determine current week from existing events context
-    const now = new Date();
-    const monday = new Date(now);
-    monday.setDate(monday.getDate() - ((now.getDay() + 6) % 7));
-    monday.setHours(0, 0, 0, 0);
-    const sunday = new Date(monday);
-    sunday.setDate(sunday.getDate() + 6);
-    sunday.setHours(23, 59, 59, 999);
-
-    await get().fetchEvents(monday.getTime(), sunday.getTime());
+    await get().fetchEvents(currentRange.startDate, currentRange.endDate);
   },
 }));

@@ -65,6 +65,16 @@ const App: React.FC = () => {
     fetchForWeek();
   }, [navigation.monday.getTime(), navigation.sunday.getTime()]);
 
+  useEffect(() => {
+    if (isWidgetMode) return;
+
+    const fetchForVisibleWeek = async () => {
+      const { fetchEvents } = useCalendarStore.getState();
+      await fetchEvents(navigation.monday.getTime(), navigation.sunday.getTime());
+    };
+    fetchForVisibleWeek();
+  }, [isWidgetMode, navigation.monday, navigation.sunday]);
+
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {

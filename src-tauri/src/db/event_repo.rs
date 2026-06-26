@@ -4,6 +4,8 @@ use crate::error::{AppError, AppResult};
 use crate::models::event::*;
 use rusqlite::{params, Connection};
 
+const MAX_CONCURRENT_EVENTS: usize = 2;
+
 /// Helper: parse Event from a database row
 fn event_from_row(row: &rusqlite::Row) -> rusqlite::Result<Event> {
     Ok(Event {
@@ -40,6 +42,33 @@ pub fn create_event(conn: &Connection, input: CreateEventInput) -> AppResult<Eve
         return Err(AppError::InvalidTimeRange(input.start_time, input.end_time));
     }
 
+    if duplicate_exists(conn, &input.title, input.start_time, input.end_time)? {
+        tracing::warn!(
+            "[DB] create_event rejected duplicate | title={} start={} end={}",
+            input.title,
+            input.start_time,
+            input.end_time
+        );
+        return Err(AppError::InvalidToolArgs(format!(
+            "相同时间已存在同名事件：{}",
+            input.title
+        )));
+    }
+
+    let max_existing = max_concurrent_in_range(conn, input.start_time, input.end_time)?;
+    if max_existing >= MAX_CONCURRENT_EVENTS {
+        tracing::warn!(
+            "[DB] create_event rejected concurrency limit | title={} start={} end={} existing_concurrent={}",
+            input.title,
+            input.start_time,
+            input.end_time,
+            max_existing
+        );
+        return Err(AppError::InvalidToolArgs(
+            "该时间段已有 2 个事件，无法继续添加".into(),
+        ));
+    }
+
     conn.execute(
         "INSERT INTO events (
             id, title, description, start_time, end_time, timezone,
@@ -66,6 +95,52 @@ pub fn create_event(conn: &Connection, input: CreateEventInput) -> AppResult<Eve
     )?;
 
     find_by_id(conn, &id)?.ok_or_else(|| AppError::Internal("created event not found".into()))
+}
+
+fn duplicate_exists(conn: &Connection, title: &str, start: i64, end: i64) -> AppResult<bool> {
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*)
+         FROM events
+         WHERE deleted_at IS NULL
+           AND title = ?1
+           AND start_time = ?2
+           AND end_time = ?3",
+        params![title.trim(), start, end],
+        |row| row.get(0),
+    )?;
+    Ok(count > 0)
+}
+
+fn max_concurrent_in_range(conn: &Connection, start: i64, end: i64) -> AppResult<usize> {
+    let events = find_by_date_range(conn, start, end)?;
+    if events.is_empty() {
+        return Ok(0);
+    }
+
+    let mut boundaries = vec![start, end];
+    for event in &events {
+        boundaries.push(event.start_time.max(start));
+        boundaries.push(event.end_time.min(end));
+    }
+    boundaries.sort_unstable();
+    boundaries.dedup();
+
+    let mut max_count = 0;
+    for pair in boundaries.windows(2) {
+        let segment_start = pair[0];
+        let segment_end = pair[1];
+        if segment_start >= segment_end {
+            continue;
+        }
+
+        let count = events
+            .iter()
+            .filter(|event| event.start_time < segment_end && event.end_time > segment_start)
+            .count();
+        max_count = max_count.max(count);
+    }
+
+    Ok(max_count)
 }
 
 /// Find an event by ID (excludes soft-deleted)

@@ -172,8 +172,12 @@
     }
 
     function updateTitle(query) {
-      if (query?.start_date && query?.end_date) {
-        title.textContent = '日程 ' + fmtDate(query.start_date) + ' - ' + fmtDate(query.end_date);
+      if (query?.start_ms && query?.end_ms) {
+        title.textContent = '日程 ' + fmtDate(query.start_ms) + ' - ' + fmtDate(query.end_ms);
+        return;
+      }
+      if (query?.start_time && query?.end_time) {
+        title.textContent = '日程 ' + query.start_time + ' - ' + query.end_time;
         return;
       }
       title.textContent = '日程';

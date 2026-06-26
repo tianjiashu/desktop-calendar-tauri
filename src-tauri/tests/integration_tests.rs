@@ -208,6 +208,42 @@ mod tests {
     }
 
     #[test]
+    fn test_duplicate_same_title_and_time_is_rejected() {
+        let conn = setup_test_db();
+        let input = make_create_input();
+
+        event_repo::create_event(&conn, input.clone()).expect("first create failed");
+        let result = event_repo::create_event(&conn, input);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_create_event_rejects_third_concurrent_event() {
+        let conn = setup_test_db();
+        let base = chrono::Utc::now().timestamp_millis() + 3600_000;
+
+        for idx in 0..2 {
+            let input = CreateEventInput {
+                title: format!("并发事件{}", idx),
+                start_time: base,
+                end_time: base + 3600_000,
+                ..make_create_input_default()
+            };
+            event_repo::create_event(&conn, input).expect("create should fit limit");
+        }
+
+        let third = CreateEventInput {
+            title: "第三个并发事件".into(),
+            start_time: base + 15 * 60_000,
+            end_time: base + 30 * 60_000,
+            ..make_create_input_default()
+        };
+
+        assert!(event_repo::create_event(&conn, third).is_err());
+    }
+
+    #[test]
     fn test_find_free_slots_returns_gaps() {
         let conn = setup_test_db();
         // Use a fixed day start (2026-06-22 00:00:00 UTC)

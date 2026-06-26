@@ -31,7 +31,7 @@
 | `create_event` | 创建新事件 |
 | `update_event` | 更新已有事件，支持 `clear_fields` 清空备注、地点、链接 |
 | `delete_event` | 软删除事件 |
-| `get_free_slots` | 查询指定 UTC 日期内的空闲时间段，返回空闲时间 Widget |
+| `get_free_slots` | 按 `YYYY-MM-DD` 查询指定日期内的空闲时间段，返回空闲时间 Widget |
 
 ### MCP 连接示例
 
@@ -160,8 +160,9 @@ CREATE TABLE events (
 
 ## 开发备注
 
-- 所有时间参数使用 Unix milliseconds
-- `get_free_slots.date` 要求传 UTC 当天 0 点时间戳
+- MCP 入参使用固定字符串时间，按 `Asia/Shanghai` 解读：日期时间为 `YYYY-MM-DD HH:mm`，日期为 `YYYY-MM-DD`
+- 数据库内部仍使用 Unix milliseconds 存储，前端和 MCP 返回值中的事件时间字段保持毫秒值
+- `create_event` 会拒绝相同时间相同标题的重复事件，并限制任意时间段最多 2 个事件
 - MCP Server 仅绑定 `127.0.0.1`
 - Widget HTML 通过 MCP resource 暴露，MIME 为 `text/html;profile=mcp-app`
 - 修改代码后请运行 `cargo test` 和 `npm run build`
