@@ -784,51 +784,81 @@ impl ServerHandler for CalendarMcpService {
 // ── Usage guide prompt ─────────────────────────────────────────────────────
 
 const USAGE_GUIDE: &str = "\
-# 桌面日历 MCP Server — 使用指南
+# 桌面日历 MCP 使用规约
 
-## 可用工具 (6个)
+你可以通过本 MCP Server 管理用户的桌面日历。所有时间均按 Asia/Shanghai 理解。
 
-| 工具 | 用途 | 关键参数 |
-|------|------|----------|
-| `list_events` | 按日期范围查询事件 | `start_time`, `end_time` (YYYY-MM-DD HH:mm) |
-| `get_event` | 获取单个事件详情 | `event_id` |
-| `create_event` | 创建新事件 | `title`, `start_time`, `end_time` (必填) |
-| `update_event` | 更新已有事件 | `event_id` (必填), 其他字段可选 |
-| `delete_event` | 软删除事件 | `event_id` |
-| `get_free_slots` | 查询空闲时间段 | `date`, `duration_minutes` (5-480) |
+## 时间参数硬规则
 
-## 参数约束
+- 不要传 Unix timestamp、毫秒时间戳、ISO 字符串或自然语言时间。
+- 日期时间必须使用 `YYYY-MM-DD HH:mm`，例如 `2026-06-23 14:00`。
+- 日期必须使用 `YYYY-MM-DD`，例如 `2026-06-23`。
+- 如果用户只给了开始时间，没有给结束时间，默认创建 1 小时日程。
+- 创建或更新时间时，必须保证 `start_time < end_time`。
 
-- **时间格式**: MCP 入参使用固定字符串，按 Asia/Shanghai 解读。
-  - 日期时间: `YYYY-MM-DD HH:mm`，例如 `2026-06-23 14:00`
-  - 日期: `YYYY-MM-DD`，例如 `2026-06-23`
-- **title**: 1-200 字符，不能为空或纯空格
-- **description**: 最长 2000 字符
-- **location**: 最长 500 字符
-- **url**: 最长 2000 字符
-- **color**: 格式 #RRGGBB（如 #3B82F6）
-- **event_type**: interview(面试) / meeting(会议) / reminder(提醒) / deadline(截止) / default(其他)
-- **status**: confirmed(已确认) / cancelled(已取消) / tentative(待定)
+## 工具
 
-## return_ui 机制
+| 工具 | 用途 |
+| --- | --- |
+| `list_events` | 查询指定时间范围内的日程 |
+| `get_event` | 查询单个日程详情 |
+| `create_event` | 创建新日程 |
+| `update_event` | 更新已有日程 |
+| `delete_event` | 删除日程 |
+| `get_free_slots` | 查询某天空闲时间段 |
 
-`list_events`, `get_event`, `get_free_slots` 支持 `return_ui: true`。
-当设为 true 时，返回结果会附带 `_meta.ui.resourceUri`，
-CodeBuddy/WorkBuddy 会自动渲染为可交互的 Widget 卡片。
-同时 `structuredContent` 会包含数据，Widget 可直接渲染无需额外请求。
+## 创建日程规则
 
-## 实时同步
+调用 `create_event` 时：
 
-`create_event` / `update_event` / `delete_event` 执行成功后，
-桌面日历界面会自动刷新，无需手动操作。
+- `title` 必填，不能为空或纯空格，最长 200 字符。
+- `start_time` 和 `end_time` 必填，格式必须是 `YYYY-MM-DD HH:mm`。
+- `event_type` 可选：`interview`、`meeting`、`reminder`、`deadline`、`default`。
+- `description` 用于补充说明，最长 2000 字符。
+- `location` 用于地点，最长 500 字符。
+- `url` 用于会议链接、详情链接或相关链接，必须以 `http://`、`https://` 或 `mailto:` 开头，最长 2000 字符。
+- `color` 可选，格式为 `#RRGGBB`。
 
-## 典型场景
+系统会自动拒绝以下情况：
+
+- 相同标题、相同开始时间、相同结束时间的重复日程。
+- 同一时间段已有 2 个日程时，继续添加新的重叠日程。
+
+如果创建失败，不要盲目重试。应向用户说明失败原因，或查询该时间段已有日程后再决定下一步。
+
+## 更新和删除规则
+
+- `update_event` 必须提供 `event_id`，其他字段按需提供。
+- `status` 可选：`confirmed`、`cancelled`、`tentative`。
+- 取消日程优先使用 `update_event(event_id=\"...\", status=\"cancelled\")`。
+- 确认用户想删除日程时，再使用 `delete_event(event_id=\"...\")`。
+
+## 查询与验证
+
+创建、更新或删除日程后，建议调用 `list_events` 查询相关时间范围，确认结果是否符合用户要求。
+
+查询某一周时：
+
+- `start_time` 使用该周周一 `00:00`
+- `end_time` 使用下周周一 `00:00`
+
+示例：
 
 1. **查看本周日程**: list_events(start_time=\"2026-06-15 00:00\", end_time=\"2026-06-22 00:00\")
-2. **添加会议**: create_event(title=\"团队周会\", start_time=\"2026-06-15 10:00\", end_time=\"2026-06-15 11:00\", event_type=\"meeting\")
-3. **查找空闲**: get_free_slots(date=\"2026-06-15\", duration_minutes=30)
-4. **修改时间**: update_event(event_id=\"...\", start_time=\"2026-06-15 14:00\", end_time=\"2026-06-15 15:00\")
-5. **取消事件**: update_event(event_id=\"...\", status=\"cancelled\")
+
+## 典型调用示例
+
+1. **创建会议**: create_event(title=\"团队周会\", start_time=\"2026-06-15 10:00\", end_time=\"2026-06-15 11:00\", event_type=\"meeting\")
+2. **创建提醒**: create_event(title=\"提交材料\", start_time=\"2026-06-16 18:00\", end_time=\"2026-06-16 19:00\", event_type=\"reminder\")
+3. **查询空闲时间**: get_free_slots(date=\"2026-06-15\", duration_minutes=30)
+4. **更新时间**: update_event(event_id=\"...\", start_time=\"2026-06-15 14:00\", end_time=\"2026-06-15 15:00\")
+5. **取消日程**: update_event(event_id=\"...\", status=\"cancelled\")
+6. **删除日程**: delete_event(event_id=\"...\")
+
+## UI 返回
+
+`list_events`、`get_event`、`get_free_slots` 支持 `return_ui: true`。
+当用户希望查看可视化结果时，可以设置 `return_ui: true`。
 ";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
