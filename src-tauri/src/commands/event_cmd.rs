@@ -1,11 +1,11 @@
 // ========== Event IPC commands (Phase 2: with event emission) ==========
 
-use tauri::State;
-use tauri::Emitter;
+use crate::db::event_repo;
 use crate::error::{AppError, AppResult};
 use crate::models::event::*;
-use crate::db::event_repo;
 use crate::AppState;
+use tauri::Emitter;
+use tauri::State;
 
 /// Emit a Tauri event to notify frontend of data changes
 fn emit_db_change(app_handle: &tauri::AppHandle, table: &str, action: &str, id: &str) {
@@ -24,7 +24,9 @@ pub fn create_event(
     state: State<AppState>,
     input: CreateEventInput,
 ) -> AppResult<Event> {
-    let conn = state.db.lock()
+    let conn = state
+        .db
+        .lock()
         .map_err(|e| AppError::Internal(format!("Lock error: {}", e)))?;
     let event = event_repo::create_event(&conn, input)?;
     emit_db_change(&app_handle, "events", "create", &event.id);
@@ -33,11 +35,10 @@ pub fn create_event(
 }
 
 #[tauri::command]
-pub fn get_event(
-    state: State<AppState>,
-    id: String,
-) -> AppResult<Option<Event>> {
-    let conn = state.db.lock()
+pub fn get_event(state: State<AppState>, id: String) -> AppResult<Option<Event>> {
+    let conn = state
+        .db
+        .lock()
         .map_err(|e| AppError::Internal(format!("Lock error: {}", e)))?;
     event_repo::find_by_id(&conn, &id)
 }
@@ -48,7 +49,9 @@ pub fn list_events(
     start_date: i64,
     end_date: i64,
 ) -> AppResult<Vec<Event>> {
-    let conn = state.db.lock()
+    let conn = state
+        .db
+        .lock()
         .map_err(|e| AppError::Internal(format!("Lock error: {}", e)))?;
     event_repo::find_by_date_range(&conn, start_date, end_date)
 }
@@ -62,14 +65,15 @@ pub fn update_event(
 ) -> AppResult<Event> {
     tracing::info!(
         "[RUST] update_event called: id={} start_time={:?} end_time={:?}",
-        id, input.start_time, input.end_time,
+        id,
+        input.start_time,
+        input.end_time,
     );
-    let conn = state.db.lock()
-        .map_err(|e| {
-            let msg = format!("Lock error: {}", e);
-            tracing::error!("[RUST] update_event lock failed: {}", msg);
-            AppError::Internal(msg)
-        })?;
+    let conn = state.db.lock().map_err(|e| {
+        let msg = format!("Lock error: {}", e);
+        tracing::error!("[RUST] update_event lock failed: {}", msg);
+        AppError::Internal(msg)
+    })?;
     match event_repo::update_event(&conn, &id, input) {
         Ok(event) => {
             emit_db_change(&app_handle, "events", "update", &event.id);
@@ -89,7 +93,9 @@ pub fn delete_event(
     state: State<AppState>,
     id: String,
 ) -> AppResult<()> {
-    let conn = state.db.lock()
+    let conn = state
+        .db
+        .lock()
         .map_err(|e| AppError::Internal(format!("Lock error: {}", e)))?;
     event_repo::soft_delete(&conn, &id)?;
     emit_db_change(&app_handle, "events", "delete", &id);
@@ -103,7 +109,9 @@ pub fn get_free_slots(
     date: i64,
     duration_minutes: i32,
 ) -> AppResult<Vec<TimeSlot>> {
-    let conn = state.db.lock()
+    let conn = state
+        .db
+        .lock()
         .map_err(|e| AppError::Internal(format!("Lock error: {}", e)))?;
     event_repo::find_free_slots(&conn, date, duration_minutes)
 }

@@ -7,8 +7,7 @@ use rusqlite::Connection;
 
 /// Get the SQLite database file path
 pub fn get_db_path() -> String {
-    let home = dirs::home_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
     home.join(".desktop-calendar")
         .join("calendar.db")
         .to_string_lossy()
@@ -17,8 +16,7 @@ pub fn get_db_path() -> String {
 
 /// Ensure DB directory exists
 fn ensure_db_dir() -> Result<(), std::io::Error> {
-    let home = dirs::home_dir()
-        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
     let dir = home.join(".desktop-calendar");
     if !dir.exists() {
         std::fs::create_dir_all(&dir)?;

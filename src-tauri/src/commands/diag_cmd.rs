@@ -1,8 +1,8 @@
 // ========== Diagnostic IPC command ==========
 
-use tauri::State;
 use crate::diagnostics::SystemDiagnostic;
 use crate::AppState;
+use tauri::State;
 
 /// Returns runtime diagnostics: log paths, DB status, recent errors.
 /// Callable from frontend for self-inspection.

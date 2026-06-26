@@ -50,12 +50,10 @@ pub async fn start_mcp_server(
                 .await
                 .map_err(|e| AppError::Http(e.to_string()))
         }
-        Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
-            Err(AppError::HttpPortInUse(
-                MCP_PORT,
-                "端口已被占用，请关闭其他实例后重试。".into(),
-            ))
-        }
+        Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => Err(AppError::HttpPortInUse(
+            MCP_PORT,
+            "端口已被占用，请关闭其他实例后重试。".into(),
+        )),
         Err(e) => Err(AppError::from(e)),
     }
 }

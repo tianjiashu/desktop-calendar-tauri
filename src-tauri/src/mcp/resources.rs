@@ -40,7 +40,10 @@ pub fn list_resources() -> Vec<rmcp::model::Resource> {
 
     // Log each resource's key fields for debugging
     for r in &resources {
-        let csp = r.raw.meta.as_ref()
+        let csp = r
+            .raw
+            .meta
+            .as_ref()
             .and_then(|m| m.get("ui"))
             .and_then(|ui| ui.get("csp"));
         tracing::info!(
@@ -63,10 +66,7 @@ fn resource(uri: &str, name: &str, description: &str, mime_type: &str) -> rmcp::
     let csp_meta = build_csp_meta();
 
     let csp_json = serde_json::to_string(&csp_meta).unwrap_or_default();
-    tracing::info!(
-        "[MCP-WIDGET] resource: uri={} csp_meta={}",
-        uri, csp_json
-    );
+    tracing::info!("[MCP-WIDGET] resource: uri={} csp_meta={}", uri, csp_json);
 
     rmcp::model::Resource {
         raw: RawResource {
@@ -109,9 +109,7 @@ fn build_csp_meta() -> Meta {
 /// Read a Widget resource by URI.
 ///
 /// Returns the complete self-contained HTML page for the Host to render.
-pub fn read_resource(
-    uri: &str,
-) -> Result<Vec<rmcp::model::ResourceContents>, AppError> {
+pub fn read_resource(uri: &str) -> Result<Vec<rmcp::model::ResourceContents>, AppError> {
     let html = match uri {
         "ui://calendar/events-list" => widgets::build_events_list_html(),
         "ui://calendar/event-detail" => widgets::build_event_detail_html(),

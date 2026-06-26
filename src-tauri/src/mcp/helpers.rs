@@ -38,10 +38,7 @@ pub fn attach_ui_meta(
 /// so the final wire format is `"_meta": { "ui": { "resourceUri": "..." } }`.
 pub fn ui_meta(resource_uri: &str) -> Meta {
     let mut map = serde_json::Map::new();
-    map.insert(
-        "ui".into(),
-        json!({ "resourceUri": resource_uri }),
-    );
+    map.insert("ui".into(), json!({ "resourceUri": resource_uri }));
     Meta(map)
 }
 

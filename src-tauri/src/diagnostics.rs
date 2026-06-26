@@ -6,10 +6,9 @@
 /// Runtime inspection:
 ///   - get_diagnostics IPC → ring buffer snapshot + system info
 ///   - /health endpoint → MCP server liveness
-
 use parking_lot::Mutex;
-use std::sync::Arc;
 use serde::Serialize;
+use std::sync::Arc;
 
 const RING_BUFFER_SIZE: usize = 50;
 
@@ -28,7 +27,9 @@ pub struct ErrorRing {
 
 impl ErrorRing {
     pub fn new() -> Self {
-        Self { entries: Mutex::new(Vec::with_capacity(RING_BUFFER_SIZE)) }
+        Self {
+            entries: Mutex::new(Vec::with_capacity(RING_BUFFER_SIZE)),
+        }
     }
 
     pub fn push(&self, entry: DiagnosticEntry) {
@@ -92,7 +93,9 @@ pub fn init(ring: Arc<ErrorRing>) -> LogPaths {
             .map(|l| format!("{}:{}", l.file(), l.line()))
             .unwrap_or_else(|| "unknown location".into());
 
-        let msg = info.payload().downcast_ref::<&str>()
+        let msg = info
+            .payload()
+            .downcast_ref::<&str>()
             .map(|s| s.to_string())
             .or_else(|| info.payload().downcast_ref::<String>().cloned())
             .unwrap_or_else(|| "unknown panic".into());

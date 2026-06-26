@@ -78,9 +78,7 @@ impl From<AppError> for rmcp::ErrorData {
         match &e {
             AppError::EventNotFound(_)
             | AppError::ResourceNotFound(_)
-            | AppError::InvalidToolArgs(_) => {
-                rmcp::ErrorData::invalid_params(msg, None)
-            }
+            | AppError::InvalidToolArgs(_) => rmcp::ErrorData::invalid_params(msg, None),
             _ => rmcp::ErrorData::internal_error(msg, None),
         }
     }
