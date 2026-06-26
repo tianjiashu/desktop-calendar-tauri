@@ -3,13 +3,14 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { logger } from '../utils/logger';
 import {
+  CONTENT_FADE_MS,
+  WINDOW_EDGE_MARGIN,
+  WIDGET_MAX_SIZE,
+  WIDGET_MIN_SIZE,
   WIDGET_SIZE,
   WEEK_VIEW_SIZE,
   TRANSITION_LOCK_MS,
 } from '../constants/windowConfig';
-
-const WINDOW_EDGE_MARGIN = 96;
-const CONTENT_FADE_MS = 120;
 
 interface WindowManager {
   isWidgetMode: boolean;
@@ -65,15 +66,7 @@ export function useWindowManager(): WindowManager {
     }, TRANSITION_LOCK_MS);
   }, []);
 
-/** Frontend -> Rust diagnostic log for offline analysis */
-async function diag(msg: string) {
-  try {
-    const { invoke } = await import('@tauri-apps/api/core');
-    await invoke('diag_log', { message: msg });
-  } catch { /* best-effort */ }
-}
-
-const doSetSize = useCallback(async (size: { width: number; height: number }, resizable: boolean) => {
+  const doSetSize = useCallback(async (size: { width: number; height: number }, resizable: boolean) => {
     const { LogicalSize, getCurrentWindow } = await import('@tauri-apps/api/window');
     const win = getCurrentWindow();
     const target = new LogicalSize(size.width, size.height);
@@ -87,8 +80,8 @@ const doSetSize = useCallback(async (size: { width: number; height: number }, re
       await win.setMaxSize(target);
     } else {
       // Restore reasonable bounds for draggable widget
-      await win.setMinSize(new LogicalSize(100, 100));
-      await win.setMaxSize(new LogicalSize(200, 200));
+      await win.setMinSize(new LogicalSize(WIDGET_MIN_SIZE.width, WIDGET_MIN_SIZE.height));
+      await win.setMaxSize(new LogicalSize(WIDGET_MAX_SIZE.width, WIDGET_MAX_SIZE.height));
     }
   }, []);
 

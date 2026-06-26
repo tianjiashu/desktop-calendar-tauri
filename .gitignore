@@ -39,6 +39,7 @@ tmp-coverage.txt
 # Tauri dev output
 tauri-dev-stderr.txt
 tauri-dev-stdout.txt
+src-tauri/stderr.txt
 
 # Misc
 *.pdb

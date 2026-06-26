@@ -2,13 +2,17 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-  WIDGET_SIZE,
-  WEEK_VIEW_SIZE,
-  TRANSITION_LOCK_MS,
-  HOUR_HEIGHT_PX,
   DAY_START_HOUR,
   DAY_END_HOUR,
+  CONTENT_FADE_MS,
+  HOUR_HEIGHT_PX,
   MCP_PORT,
+  TRANSITION_LOCK_MS,
+  WIDGET_MAX_SIZE,
+  WIDGET_MIN_SIZE,
+  WIDGET_SIZE,
+  WEEK_VIEW_SIZE,
+  WINDOW_EDGE_MARGIN,
 } from '../../src/constants/windowConfig';
 
 describe('windowConfig', () => {
@@ -20,8 +24,21 @@ describe('windowConfig', () => {
     expect(WEEK_VIEW_SIZE).toEqual({ width: 860, height: 780 });
   });
 
+  it('widget resize bounds match the floating widget behavior', () => {
+    expect(WIDGET_MIN_SIZE).toEqual({ width: 100, height: 100 });
+    expect(WIDGET_MAX_SIZE).toEqual({ width: 200, height: 200 });
+  });
+
+  it('WINDOW_EDGE_MARGIN is 96', () => {
+    expect(WINDOW_EDGE_MARGIN).toBe(96);
+  });
+
   it('TRANSITION_LOCK_MS is 350', () => {
     expect(TRANSITION_LOCK_MS).toBe(350);
+  });
+
+  it('CONTENT_FADE_MS is 120', () => {
+    expect(CONTENT_FADE_MS).toBe(120);
   });
 
   it('HOUR_HEIGHT_PX is 50', () => {

@@ -152,15 +152,14 @@ pub fn run() {
             commands::set_always_on_top,
             commands::diag_log,
         ])
-        // DIAGNOSTIC: Listen for ALL window resize events to detect if
-        // setSize is being "overwritten" by something else
+        // Debug-only window resize trace for transition diagnostics.
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Resized(size) = event {
                 let outer = window.outer_size().unwrap_or_default();
                 let scale = window.scale_factor().unwrap_or(1.0);
                 let logical_w = outer.width as f64 / scale;
                 let logical_h = outer.height as f64 / scale;
-                tracing::info!(
+                tracing::debug!(
                     "[RUST EVENT] Window Resized: physical={}x{} outerSize={}x{} logicalSize={:.0}x{:.0} scaleFactor={:.2}",
                     size.width, size.height,
                     outer.width, outer.height,
@@ -174,12 +173,12 @@ pub fn run() {
             let window = app.get_webview_window("main")
                 .expect("main window not found");
 
-            // DIAGNOSTIC: Log initial window state
+            // Debug-only initial window state trace.
             let outer_size = window.outer_size().unwrap_or_default();
             let inner_size = window.inner_size().unwrap_or_default();
             let outer_pos = window.outer_position().unwrap_or_default();
             let scale = window.scale_factor().unwrap_or(1.0);
-            tracing::info!(
+            tracing::debug!(
                 "[RUST SETUP] Window init state: outerSize={}x{} innerSize={}x{} outerPos=({},{}) scaleFactor={:.2} decorations={} resizable={} transparent=true",
                 outer_size.width, outer_size.height,
                 inner_size.width, inner_size.height,
@@ -223,7 +222,7 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            // FIX: Force window to physical 64x64px to ensure it renders as a perfect square circle
+            // Force window to physical 100x100px so it renders as a perfect square circle
             // (not an oval) on high-DPI displays (e.g. 125%, 150% scaling).
             // tauri.conf.json width/height are LogicalSize, which gets scaled by DPI,
             // but CSS border-radius:50% operates on physical pixels — causing mismatch.

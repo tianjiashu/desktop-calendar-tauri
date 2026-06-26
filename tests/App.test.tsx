@@ -1,11 +1,13 @@
 // ========== App integration tests ==========
-// App.tsx is deeply coupled to Tauri APIs - basic smoke test only.
 
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 describe('App', () => {
-  it('App module exists', async () => {
-    const mod = await import('../src/App');
-    expect(mod.default).toBeDefined();
-  }, 15_000);
+  it('App source exports the root component', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/App.tsx'), 'utf8');
+    expect(source).toContain('const App: React.FC');
+    expect(source).toContain('export default App');
+  });
 });

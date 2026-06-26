@@ -1,7 +1,6 @@
 // ========== Event overlap column assignment (F14) ==========
 
 import type { CalendarEvent, EventWithLayout } from '../types';
-import { logger } from './logger';
 
 /**
  * Check if two events overlap in time.
@@ -91,24 +90,12 @@ function assignColumnsForGroup(events: CalendarEvent[]): {
 export function assignColumns(events: CalendarEvent[]): EventWithLayout[] {
   if (events.length === 0) return [];
 
-  logger.info(
-    `[LAYOUT] assignColumns input: ${events.length} events | ` +
-    events.map(e => `${e.title}(${e.id.slice(0,4)}) [${new Date(e.start_time).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}-${new Date(e.end_time).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}]`).join(', '),
-  );
-
   const groups = buildOverlapGroups(events);
 
   const result: EventWithLayout[] = [];
 
   for (const group of groups) {
     const assigned = assignColumnsForGroup(group);
-
-    logger.info(
-      `[LAYOUT] group result: groupSize=${group.length} totalColumns=${assigned[0]?.totalColumns ?? 0} | ` +
-      assigned.map(({ event, column, totalColumns }) =>
-        `${event.title.slice(0,8)} col=${column}/${totalColumns} [${new Date(event.start_time).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}-${new Date(event.end_time).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}]`
-      ).join(' | '),
-    );
 
     for (const { event, column, totalColumns } of assigned) {
       result.push({ ...event, column, totalColumns });

@@ -58,30 +58,11 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
   },
 
   updateEvent: async (id: string, input: UpdateEventInput): Promise<CalendarEvent> => {
-    logger.info(
-      `[STORE] updateEvent START | id=${id} | ` +
-      `start_time=${input.start_time} | end_time=${input.end_time}`,
-    );
     set({ error: null });
-    const t0 = performance.now();
     const updated = await invokeOrThrow<CalendarEvent>('update_event', { id, input });
-    const t1 = performance.now();
-    logger.info(
-      `[STORE] updateEvent IPC returned | id=${id} | ` +
-      `result.start_time=${updated.start_time} | result.end_time=${updated.end_time} | ` +
-      `duration=${(t1 - t0).toFixed(1)}ms`,
-    );
-    set(state => {
-      logger.info(
-        `[STORE] updateEvent → applying set() | id=${id} | ` +
-        `eventsCount=${state.events.length} | ` +
-        `oldEvent=${state.events.find(ev => ev.id === id) ? 'found' : 'NOT found'}`,
-      );
-      return {
-        events: state.events.map(ev => ev.id === id ? updated : ev),
-      };
-    });
-    logger.info(`[STORE] updateEvent DONE | id=${id}`);
+    set(state => ({
+      events: state.events.map(ev => ev.id === id ? updated : ev),
+    }));
     return updated;
   },
 
@@ -119,51 +100,28 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
 
         await listen<DbChangedEvent>('db:events_changed', async (event) => {
           const { action, id, timestamp } = event.payload;
-          const { lastSync, events } = get();
-
-          logger.info(
-            `[STORE] db:events_changed RECEIVED | action=${action} | id=${id} | ` +
-            `timestamp=${timestamp} | lastSync=${lastSync} | ` +
-            `eventsCount=${events.length}`,
-          );
+          const { lastSync } = get();
 
           // Drop stale events (out-of-order delivery)
           if (timestamp < lastSync) {
-            logger.info(`[STORE] db:events_changed SKIPPED (stale) | id=${id} | timestamp=${timestamp} < lastSync=${lastSync}`);
             return;
           }
 
           if (action === 'create' || action === 'update') {
             // Fetch the event from DB to get full data
-            logger.info(`[STORE] db:events_changed → fetching get_event(${id})...`);
-            const t0 = performance.now();
             const result = await invokeSafe<CalendarEvent | null>('get_event', { id });
-            const t1 = performance.now();
             if (result.ok && result.value) {
-              const ev = result.value;
-              logger.info(
-                `[STORE] db:events_changed → get_event returned | id=${id} | ` +
-                `start_time=${ev.start_time} | end_time=${ev.end_time} | ` +
-                `duration=${(t1 - t0).toFixed(1)}ms`,
-              );
-              set(state => {
-                logger.info(
-                  `[STORE] db:events_changed → applying set() | id=${id} | ` +
-                  `eventsCount=${state.events.length}`,
-                );
-                return {
-                  events: [
-                    ...state.events.filter(ev => ev.id !== id),
-                    result.value!,
-                  ].sort((a, b) => a.start_time - b.start_time),
-                  lastSync: timestamp,
-                };
-              });
+              set(state => ({
+                events: [
+                  ...state.events.filter(ev => ev.id !== id),
+                  result.value!,
+                ].sort((a, b) => a.start_time - b.start_time),
+                lastSync: timestamp,
+              }));
             } else {
-              logger.warn(`[STORE] db:events_changed → get_event(${id}) FAILED or returned null`);
+              logger.warn(`[STORE] db:events_changed get_event(${id}) failed or returned null`);
             }
           } else if (action === 'delete') {
-            logger.info(`[STORE] db:events_changed → delete id=${id}`);
             set(state => ({
               events: state.events.filter(ev => ev.id !== id),
               lastSync: timestamp,
@@ -171,9 +129,9 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
           }
         });
 
-        logger.info('Tauri event listener initialized for db:events_changed');
+        logger.debug('Tauri event listener initialized for db:events_changed');
       } catch {
-        // Not in Tauri environment — ignore
+        // Not in Tauri environment; ignore.
       }
     };
 
