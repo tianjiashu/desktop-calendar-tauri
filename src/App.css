@@ -227,17 +227,33 @@
 }
 
 .week-header-nav {
-  display: flex;
+  position: absolute;
+  inset: 0;
+  display: grid;
   align-items: center;
-  gap: 4px;
+  justify-items: center;
+  pointer-events: none;
+}
+
+.week-header-week-switcher {
+  width: 330px;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 32px;
+  align-items: center;
+  justify-items: center;
+  pointer-events: auto;
 }
 
 .week-header-title {
   font-size: var(--text-md);
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0 12px;
+  width: 100%;
+  margin: 0;
+  text-align: center;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .week-header-btn {
@@ -273,21 +289,30 @@
 
 /* Divider between navigation and action groups */
 .week-header-divider {
+  position: absolute;
+  left: calc(50% + 268px);
+  top: 50%;
   width: 1px;
   height: 20px;
   background: var(--border-default);
-  margin: 0 8px;
+  margin: 0;
+  transform: translateY(-50%);
   flex-shrink: 0;
 }
 
 /* Today pill button — shown only when not on current week */
 .week-header-btn-today {
+  position: absolute;
+  left: calc(50% + 194px);
+  top: 50%;
   width: auto;
   padding: 0 10px;
   gap: 4px;
   font-size: var(--text-xs);
   font-weight: 500;
   color: var(--accent-500);
+  transform: translateY(-50%);
+  pointer-events: auto;
 }
 
 .week-header-btn-today:hover {

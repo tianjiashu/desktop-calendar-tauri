@@ -45,13 +45,15 @@ const WeekHeader: React.FC<WeekHeaderProps> = ({
     <div className="week-header" onMouseDown={handleHeaderMouseDown}>
       {/* Navigation group */}
       <div className="week-header-nav">
-        <button className="week-header-btn" onClick={onPrevWeek} title="上一周" aria-label="上一周">
-          <CaretLeft size={16} weight="regular" />
-        </button>
-        <span className="week-header-title">{weekTitle}</span>
-        <button className="week-header-btn" onClick={onNextWeek} title="下一周" aria-label="下一周">
-          <CaretRight size={16} weight="regular" />
-        </button>
+        <div className="week-header-week-switcher">
+          <button className="week-header-btn" onClick={onPrevWeek} title="上一周" aria-label="上一周">
+            <CaretLeft size={16} weight="regular" />
+          </button>
+          <span className="week-header-title">{weekTitle}</span>
+          <button className="week-header-btn" onClick={onNextWeek} title="下一周" aria-label="下一周">
+            <CaretRight size={16} weight="regular" />
+          </button>
+        </div>
         {!isCurrentWeek && (
           <button
             className="week-header-btn week-header-btn-today"
