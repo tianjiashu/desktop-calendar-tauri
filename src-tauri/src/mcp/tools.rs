@@ -827,7 +827,7 @@ CodeBuddy/WorkBuddy 会自动渲染为可交互的 Widget 卡片。
 1. **查看本周日程**: list_events(start_time=\"2026-06-15 00:00\", end_time=\"2026-06-22 00:00\")
 2. **添加会议**: create_event(title=\"团队周会\", start_time=\"2026-06-15 10:00\", end_time=\"2026-06-15 11:00\", event_type=\"meeting\")
 3. **查找空闲**: get_free_slots(date=\"2026-06-15\", duration_minutes=30)
-4. **修改时间**: update_event(event_id=\"...\", start_time=..., end_time=...)
+4. **修改时间**: update_event(event_id=\"...\", start_time=\"2026-06-15 14:00\", end_time=\"2026-06-15 15:00\")
 5. **取消事件**: update_event(event_id=\"...\", status=\"cancelled\")
 ";
 
