@@ -33,7 +33,7 @@ const SPRING = { type: 'spring' as const, stiffness: 350, damping: 28 };
  */
 const App: React.FC = () => {
   const shouldReduce = useReducedMotion();
-  const { isWidgetMode, toggleExpand, shrinkToWidget } = useWindowManager();
+  const { isWidgetMode, isTransitioning, toggleExpand, shrinkToWidget } = useWindowManager();
   const navigation = useWeekNavigation();
   const { events, isLoading, error } = useCalendarStore();
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -95,15 +95,19 @@ const App: React.FC = () => {
         {isWidgetMode ? (
           <motion.div
             key="widget"
-            className="app-container"
+            className={`app-container ${isTransitioning ? 'app-container--transitioning' : ''}`}
             initial={shouldReduce
               ? { opacity: 0 }
               : { scale: 0.8, opacity: 0, filter: 'blur(3px)' }
             }
             animate={
               shouldReduce
-                ? { opacity: 1 }
-                : { scale: 1, opacity: 1, filter: 'blur(0px)' }
+                ? { opacity: isTransitioning ? 0 : 1 }
+                : {
+                  scale: isTransitioning ? 0.9 : 1,
+                  opacity: isTransitioning ? 0 : 1,
+                  filter: isTransitioning ? 'blur(2px)' : 'blur(0px)',
+                }
             }
             exit={shouldReduce
               ? { opacity: 0 }
@@ -120,15 +124,19 @@ const App: React.FC = () => {
         ) : (
           <motion.div
             key="week"
-            className="app-container"
+            className={`app-container ${isTransitioning ? 'app-container--transitioning' : ''}`}
             initial={shouldReduce
               ? { opacity: 0 }
               : { scale: 0.97, opacity: 0, filter: 'blur(2px)' }
             }
             animate={
               shouldReduce
-                ? { opacity: 1 }
-                : { scale: 1, opacity: 1, filter: 'blur(0px)' }
+                ? { opacity: isTransitioning ? 0 : 1 }
+                : {
+                  scale: isTransitioning ? 0.985 : 1,
+                  opacity: isTransitioning ? 0 : 1,
+                  filter: isTransitioning ? 'blur(2px)' : 'blur(0px)',
+                }
             }
             exit={shouldReduce
               ? { opacity: 0 }

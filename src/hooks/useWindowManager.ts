@@ -9,6 +9,7 @@ import {
 } from '../constants/windowConfig';
 
 const WINDOW_EDGE_MARGIN = 96;
+const CONTENT_FADE_MS = 120;
 
 interface WindowManager {
   isWidgetMode: boolean;
@@ -27,8 +28,28 @@ interface WindowManager {
  */
 export function useWindowManager(): WindowManager {
   const [isWidgetMode, setIsWidgetMode] = useState(true);
+  const [isTransitioningState, setIsTransitioningState] = useState(false);
   const isTransitioning = useRef(false);
   const didInitPosition = useRef(false);
+
+  const wait = useCallback((ms: number) => new Promise(resolve => setTimeout(resolve, ms)), []);
+
+  const nextFrame = useCallback(
+    () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())),
+    [],
+  );
+
+  const beginTransition = useCallback(() => {
+    isTransitioning.current = true;
+    setIsTransitioningState(true);
+  }, []);
+
+  const endTransition = useCallback(() => {
+    setIsTransitioningState(false);
+    setTimeout(() => {
+      isTransitioning.current = false;
+    }, TRANSITION_LOCK_MS);
+  }, []);
 
 /** Frontend → Rust diagnostic log for offline analysis */
 async function diag(msg: string) {
@@ -117,47 +138,48 @@ const doSetSize = useCallback(async (size: { width: number; height: number }, re
       logger.warn('toggleExpand BLOCKED: already transitioning');
       return;
     }
-    isTransitioning.current = true;
+    beginTransition();
     logger.info('=== toggleExpand START (widget → weekView) ===');
 
     try {
-      setIsWidgetMode(false);             // Switch React state FIRST — renders WeekView
+      await wait(CONTENT_FADE_MS);
       await setAlwaysOnTop(false);        // Disable pin-to-top for week view
       await doSetSize(WEEK_VIEW_SIZE, false); // Fixed size, no resize
       await waitForWindowSize(WEEK_VIEW_SIZE);
       await moveToCenter();
+      setIsWidgetMode(false);
+      await nextFrame();
       logger.info('=== toggleExpand COMPLETE ===');
     } catch (e) {
       logger.error('toggleExpand ERROR:', e);
     } finally {
-      setTimeout(() => {
-        isTransitioning.current = false;
-      }, TRANSITION_LOCK_MS);
+      endTransition();
     }
-  }, [doSetSize, moveToCenter, setAlwaysOnTop, waitForWindowSize]);
+  }, [beginTransition, doSetSize, endTransition, moveToCenter, nextFrame, setAlwaysOnTop, wait, waitForWindowSize]);
 
   const shrinkToWidget = useCallback(async () => {
     if (isTransitioning.current) {
       logger.warn('shrinkToWidget BLOCKED: already transitioning');
       return;
     }
-    isTransitioning.current = true;
+    beginTransition();
     logger.info('=== shrinkToWidget START (weekView → widget) ===');
 
     try {
-      setIsWidgetMode(true);              // Switch React state FIRST — renders BallWidget
+      await wait(CONTENT_FADE_MS);
       await doSetSize(WIDGET_SIZE, true); // Resizable for dragging
+      await waitForWindowSize(WIDGET_SIZE);
       await moveToBottomRight();
       await setAlwaysOnTop(true);         // Re-enable pin-to-top
+      setIsWidgetMode(true);
+      await nextFrame();
       logger.info('=== shrinkToWidget COMPLETE ===');
     } catch (e) {
       logger.error('shrinkToWidget ERROR:', e);
     } finally {
-      setTimeout(() => {
-        isTransitioning.current = false;
-      }, TRANSITION_LOCK_MS);
+      endTransition();
     }
-  }, [doSetSize, moveToBottomRight, setAlwaysOnTop]);
+  }, [beginTransition, doSetSize, endTransition, moveToBottomRight, nextFrame, setAlwaysOnTop, wait, waitForWindowSize]);
 
   useEffect(() => {
     if (didInitPosition.current) return;
@@ -176,5 +198,5 @@ const doSetSize = useCallback(async (size: { width: number; height: number }, re
     initWidgetWindow();
   }, [doSetSize, moveToBottomRight, setAlwaysOnTop]);
 
-  return { isWidgetMode, isTransitioning: isTransitioning.current, toggleExpand, shrinkToWidget };
+  return { isWidgetMode, isTransitioning: isTransitioningState, toggleExpand, shrinkToWidget };
 }
