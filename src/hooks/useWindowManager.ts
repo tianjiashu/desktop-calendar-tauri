@@ -21,8 +21,8 @@ interface WindowManager {
 /**
  * Manages window mode switching between float widget and week view.
  *
- * Key design: React state is updated BEFORE window resize, so the correct
- * component renders before size changes — eliminating visual flash.
+ * Key design: fade content out, hide the native window during resize/reposition,
+ * switch React content while hidden, then fade back in.
  *
  * Transition lock prevents concurrent state conflicts from rapid clicks.
  */
@@ -39,6 +39,20 @@ export function useWindowManager(): WindowManager {
     [],
   );
 
+  const runWhileWindowHidden = useCallback(async (operation: () => Promise<void>) => {
+    const { getCurrentWindow } = await import('@tauri-apps/api/window');
+    const win = getCurrentWindow();
+
+    await win.hide();
+    try {
+      await operation();
+      await nextFrame();
+    } finally {
+      await win.show();
+      await nextFrame();
+    }
+  }, [nextFrame]);
+
   const beginTransition = useCallback(() => {
     isTransitioning.current = true;
     setIsTransitioningState(true);
@@ -51,7 +65,7 @@ export function useWindowManager(): WindowManager {
     }, TRANSITION_LOCK_MS);
   }, []);
 
-/** Frontend → Rust diagnostic log for offline analysis */
+/** Frontend -> Rust diagnostic log for offline analysis */
 async function diag(msg: string) {
   try {
     const { invoke } = await import('@tauri-apps/api/core');
@@ -139,23 +153,24 @@ const doSetSize = useCallback(async (size: { width: number; height: number }, re
       return;
     }
     beginTransition();
-    logger.info('=== toggleExpand START (widget → weekView) ===');
+    logger.info('=== toggleExpand START (widget -> weekView) ===');
 
     try {
       await wait(CONTENT_FADE_MS);
-      await setAlwaysOnTop(false);        // Disable pin-to-top for week view
-      await doSetSize(WEEK_VIEW_SIZE, false); // Fixed size, no resize
-      await waitForWindowSize(WEEK_VIEW_SIZE);
-      await moveToCenter();
-      setIsWidgetMode(false);
-      await nextFrame();
+      await runWhileWindowHidden(async () => {
+        await setAlwaysOnTop(false);        // Disable pin-to-top for week view
+        await doSetSize(WEEK_VIEW_SIZE, false); // Fixed size, no resize
+        await waitForWindowSize(WEEK_VIEW_SIZE);
+        await moveToCenter();
+        setIsWidgetMode(false);
+      });
       logger.info('=== toggleExpand COMPLETE ===');
     } catch (e) {
       logger.error('toggleExpand ERROR:', e);
     } finally {
       endTransition();
     }
-  }, [beginTransition, doSetSize, endTransition, moveToCenter, nextFrame, setAlwaysOnTop, wait, waitForWindowSize]);
+  }, [beginTransition, doSetSize, endTransition, moveToCenter, runWhileWindowHidden, setAlwaysOnTop, wait, waitForWindowSize]);
 
   const shrinkToWidget = useCallback(async () => {
     if (isTransitioning.current) {
@@ -163,23 +178,24 @@ const doSetSize = useCallback(async (size: { width: number; height: number }, re
       return;
     }
     beginTransition();
-    logger.info('=== shrinkToWidget START (weekView → widget) ===');
+    logger.info('=== shrinkToWidget START (weekView -> widget) ===');
 
     try {
       await wait(CONTENT_FADE_MS);
-      await doSetSize(WIDGET_SIZE, true); // Resizable for dragging
-      await waitForWindowSize(WIDGET_SIZE);
-      await moveToBottomRight();
-      await setAlwaysOnTop(true);         // Re-enable pin-to-top
-      setIsWidgetMode(true);
-      await nextFrame();
+      await runWhileWindowHidden(async () => {
+        await doSetSize(WIDGET_SIZE, true); // Resizable for dragging
+        await waitForWindowSize(WIDGET_SIZE);
+        await moveToBottomRight();
+        await setAlwaysOnTop(true);         // Re-enable pin-to-top
+        setIsWidgetMode(true);
+      });
       logger.info('=== shrinkToWidget COMPLETE ===');
     } catch (e) {
       logger.error('shrinkToWidget ERROR:', e);
     } finally {
       endTransition();
     }
-  }, [beginTransition, doSetSize, endTransition, moveToBottomRight, nextFrame, setAlwaysOnTop, wait, waitForWindowSize]);
+  }, [beginTransition, doSetSize, endTransition, moveToBottomRight, runWhileWindowHidden, setAlwaysOnTop, wait, waitForWindowSize]);
 
   useEffect(() => {
     if (didInitPosition.current) return;

@@ -116,7 +116,9 @@ const App: React.FC = () => {
             transition={
               shouldReduce
                 ? { duration: 0 }
-                : { ...SPRING }
+                : isTransitioning
+                  ? { duration: EXIT_DURATION, ease: EASE }
+                  : { ...SPRING }
             }
           >
             <BallWidget onDoubleClick={toggleExpand} events={events} />
@@ -145,7 +147,10 @@ const App: React.FC = () => {
             transition={
               shouldReduce
                 ? { duration: 0 }
-                : { duration: ENTER_WEEK_DURATION, ease: EASE }
+                : {
+                  duration: isTransitioning ? EXIT_DURATION : ENTER_WEEK_DURATION,
+                  ease: EASE,
+                }
             }
           >
             <WeekView
