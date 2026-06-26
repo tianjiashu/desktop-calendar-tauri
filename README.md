@@ -7,6 +7,10 @@
 ![MCP](https://img.shields.io/badge/MCP-enabled-4F6BED)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
+<p align="center">
+  <img src="icons/app-icon-256.png" alt="Desktop Calendar Tauri app icon" width="128" height="128">
+</p>
+
 Desktop Calendar Tauri is a local-first desktop calendar for both humans and AI agents.
 Humans manage schedules through a lightweight desktop UI, while agents use the built-in
 local MCP server to read and write the same SQLite calendar database.
