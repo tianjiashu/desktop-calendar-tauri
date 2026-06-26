@@ -160,6 +160,7 @@ CREATE TABLE events (
 
 ## 开发备注
 
+- 项目日常开发规范见 [docs/DEVELOPMENT-GUIDELINES.md](docs/DEVELOPMENT-GUIDELINES.md)
 - MCP 入参使用固定字符串时间，按 `Asia/Shanghai` 解读：日期时间为 `YYYY-MM-DD HH:mm`，日期为 `YYYY-MM-DD`
 - 数据库内部仍使用 Unix milliseconds 存储，前端和 MCP 返回值中的事件时间字段保持毫秒值
 - `create_event` 会拒绝相同时间相同标题的重复事件，并限制任意时间段最多 2 个事件
