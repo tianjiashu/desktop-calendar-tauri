@@ -1,4 +1,4 @@
-# Desktop Calendar Tauri
+# DayPilot
 
 ![Tauri](https://img.shields.io/badge/Tauri-2.x-24C8DB?logo=tauri&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=111)
@@ -8,10 +8,10 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 <p align="center">
-  <img src="icons/app-icon-256.png" alt="Desktop Calendar Tauri app icon" width="128" height="128">
+  <img src="icons/app-icon-256.png" alt="DayPilot app icon" width="128" height="128">
 </p>
 
-Desktop Calendar Tauri is a local-first desktop calendar for both humans and AI agents.
+DayPilot is a local-first desktop calendar for both humans and AI agents.
 Humans manage schedules through a lightweight desktop UI, while agents use the built-in
 local MCP server to read and write the same SQLite calendar database.
 
@@ -200,7 +200,7 @@ MIT
 
 ## 中文
 
-Desktop Calendar Tauri 是一个面向人类用户和 AI Agent 的本地优先桌面日历。
+DayPilot 是一个面向人类用户和 AI Agent 的本地优先桌面日历。
 人类通过轻量桌面界面管理日程，Agent 通过内置本地 MCP Server 读写同一份 SQLite 日历数据库。
 
 ### 项目亮点
